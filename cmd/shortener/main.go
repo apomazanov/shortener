@@ -7,6 +7,7 @@ import (
 	"github.com/apomazanov/shortener/internal/repository"
 )
 
+/* -------------------------------------------------------------------------- */
 func main() {
 	repo := repository.NewInMemoryRepo();
 	handler := handler.New(repo)

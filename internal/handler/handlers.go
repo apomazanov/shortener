@@ -16,16 +16,18 @@ type Handler struct {
 	repo URLRepository
 }
 
+/* -------------------------------------------------------------------------- */
 func New(repo URLRepository) *Handler {
 	return &Handler{repo: repo}
 }
 
+/* -------------------------------------------------------------------------- */
 func (h *Handler) ExtractURL(w http.ResponseWriter, req *http.Request) {
 	short := strings.TrimPrefix(req.URL.Path, "/")
 
 	long, ok := h.repo.Get(short)
 	if !ok {
-		http.Error(w, "", http.StatusNotFound)
+		http.Error(w, "URL not found", http.StatusNotFound)
 		return
 	}
 
@@ -35,6 +37,7 @@ func (h *Handler) ExtractURL(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, "Redirecting to %s\n", long)
 }
 
+/* -------------------------------------------------------------------------- */
 func (h *Handler) RegisterURL(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 	body, err := io.ReadAll(req.Body)
@@ -46,7 +49,7 @@ func (h *Handler) RegisterURL(w http.ResponseWriter, req *http.Request) {
 
 	short, ok := h.repo.Add(string(body))
 	if !ok {
-		http.Error(w, "Error appending storage", http.StatusServiceUnavailable)
+		http.Error(w, "Adding failed", http.StatusServiceUnavailable)
 		return
 	}
 	respBody := fmt.Sprintf("http://localhost:8080/%s", short)
@@ -56,6 +59,7 @@ func (h *Handler) RegisterURL(w http.ResponseWriter, req *http.Request) {
 	w.Write([]byte(respBody))
 }
 
+/* -------------------------------------------------------------------------- */
 func (h *Handler) Reject(w http.ResponseWriter, req *http.Request) {
 	http.Error(w, "", http.StatusBadRequest)
 }
