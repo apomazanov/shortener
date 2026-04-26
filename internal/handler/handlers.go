@@ -5,15 +5,27 @@ import (
 	"io"
 	"net/http"
 	"strings"
-
-	"github.com/apomazanov/shortener/internal/repository"
 )
 
-func Get(w http.ResponseWriter, req *http.Request) {
+type URLRepository interface {
+	Add(long string) (string, bool)
+	Get(short string) (string, bool)
+}
+
+type Handler struct {
+	repo URLRepository
+}
+
+func New(repo URLRepository) *Handler {
+	return &Handler{repo: repo}
+}
+
+func (h *Handler) ExtractURL(w http.ResponseWriter, req *http.Request) {
 	short := strings.TrimPrefix(req.URL.Path, "/")
-	long, ok := repository.GetRecord(short)
+
+	long, ok := h.repo.Get(short)
 	if !ok {
-		http.Error(w, "Error finding URL", http.StatusNotFound)
+		http.Error(w, "", http.StatusNotFound)
 		return
 	}
 
@@ -23,15 +35,16 @@ func Get(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, "Redirecting to %s\n", long)
 }
 
-func Post(w http.ResponseWriter, req *http.Request) {
+func (h *Handler) RegisterURL(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
-		http.Error(w, "Error reading request body", http.StatusBadRequest)
+		fmt.Println(err.Error())
+		http.Error(w, "", http.StatusBadRequest)
 		return
 	}
 
-	short, ok := repository.AddRecord(string(body))
+	short, ok := h.repo.Add(string(body))
 	if !ok {
 		http.Error(w, "Error appending storage", http.StatusServiceUnavailable)
 		return
@@ -43,6 +56,6 @@ func Post(w http.ResponseWriter, req *http.Request) {
 	w.Write([]byte(respBody))
 }
 
-func CatchAll(w http.ResponseWriter, req *http.Request) {
+func (h *Handler) Reject(w http.ResponseWriter, req *http.Request) {
 	http.Error(w, "", http.StatusBadRequest)
 }
