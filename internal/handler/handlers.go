@@ -13,7 +13,7 @@ func Get(w http.ResponseWriter, req *http.Request) {
 	short := strings.TrimPrefix(req.URL.Path, "/")
 	long, ok := repository.GetRecord(short)
 	if !ok {
-		http.Error(w, "Error finding URL", http.StatusBadRequest)
+		http.Error(w, "Error finding URL", http.StatusNotFound)
 		return
 	}
 
@@ -24,13 +24,6 @@ func Get(w http.ResponseWriter, req *http.Request) {
 }
 
 func Post(w http.ResponseWriter, req *http.Request) {
-	/*
-		if !strings.HasPrefix(req.Header.Get("Content-Type"), "text/plain") {
-			http.Error(w, "Only text/plain allowed", http.StatusBadRequest)
-			return
-		}
-	*/
-
 	defer req.Body.Close()
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
@@ -40,7 +33,7 @@ func Post(w http.ResponseWriter, req *http.Request) {
 
 	short, ok := repository.AddRecord(string(body))
 	if !ok {
-		http.Error(w, "Error appending storage", http.StatusBadRequest)
+		http.Error(w, "Error appending storage", http.StatusServiceUnavailable)
 		return
 	}
 	respBody := fmt.Sprintf("http://localhost:8080/%s", short)
@@ -51,6 +44,5 @@ func Post(w http.ResponseWriter, req *http.Request) {
 }
 
 func CatchAll(w http.ResponseWriter, req *http.Request) {
-	fmt.Println("Not supported")
 	http.Error(w, "", http.StatusBadRequest)
 }
