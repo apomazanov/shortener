@@ -1,16 +1,25 @@
 package main
 
 import (
+	"flag"
+
 	"github.com/labstack/echo/v5"
 
+	"github.com/apomazanov/shortener/internal/config"
 	"github.com/apomazanov/shortener/internal/handler"
 	"github.com/apomazanov/shortener/internal/repository"
 )
 
 /* -------------------------------------------------------------------------- */
 func main() {
+	cfg := &config.Config{}
+
+	flag.StringVar(&cfg.BaseURL, "b", "http://localhost:8080", "Base URL for aliases")
+	flag.StringVar(&cfg.ServerPort, "a", ":8080", "HTTP-server address:port")
+	flag.Parse()
+
 	r := repository.NewInMemoryRepo()
-	h := handler.New(r)
+	h := handler.New(r, cfg)
 
 	e := echo.New()
 
@@ -18,7 +27,7 @@ func main() {
 	e.GET("/:short", h.ExtractURL)
 	e.POST("/", h.RegisterURL)
 
-	err := e.Start("127.0.0.1:8080")
+	err := e.Start(cfg.GetServerAddress())
 	if err != nil {
 		panic(err)
 	}

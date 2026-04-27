@@ -18,10 +18,6 @@ type repoMock struct {
 	ok    bool
 }
 
-func newRepoMock() *repoMock {
-	return &repoMock{}
-}
-
 func (r *repoMock) Add(long string) (string, bool) {
 	return r.value, r.ok
 }
@@ -30,10 +26,20 @@ func (r *repoMock) Get(short string) (string, bool) {
 	return r.value, r.ok
 }
 
+/* ------------------------------- Config mock ------------------------------ */
+type cfgMock struct {
+	baseURL string
+}
+
+func (c *cfgMock) GetURLBase() string {
+	return c.baseURL
+}
+
 /* -------------------------------------------------------------------------- */
 func TestHandler_Register(t *testing.T) {
-	r := newRepoMock()
-	h := New(r)
+	r := &repoMock{}
+	cfg := &cfgMock{}
+	h := New(r, cfg)
 	e := echo.New()
 
 	// TODO: io.ReadAll() error simulation
@@ -86,14 +92,15 @@ func TestHandler_Register(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusCreated, resp.Code)
-		assert.Equal(t, "http://localhost:8080/short1", resp.Body.String())
+		assert.Equal(t, cfg.baseURL+"/short1", resp.Body.String())
 	})
 }
 
 /* -------------------------------------------------------------------------- */
 func TestHandler_Extract(t *testing.T) {
-	r := newRepoMock()
-	h := New(r)
+	r := &repoMock{}
+	cfg := &cfgMock{}
+	h := New(r, cfg)
 	e := echo.New()
 
 	t.Run("success", func(t *testing.T) {
@@ -141,8 +148,9 @@ func TestHandler_Extract(t *testing.T) {
 
 /* -------------------------------------------------------------------------- */
 func TestHandler_Reject(t *testing.T) {
-	r := newRepoMock()
-	h := New(r)
+	r := &repoMock{}
+	cfg := &cfgMock{}
+	h := New(r, cfg)
 	e := echo.New()
 
 	t.Run("return BadRequest", func(t *testing.T) {

@@ -13,13 +13,21 @@ type URLRepository interface {
 	Get(short string) (string, bool)
 }
 
+type URLConfig interface {
+	GetURLBase() string
+}
+
 type Handler struct {
 	repo URLRepository
+	cfg  URLConfig
 }
 
 /* -------------------------------------------------------------------------- */
-func New(repo URLRepository) *Handler {
-	return &Handler{repo: repo}
+func New(repo URLRepository, cfg URLConfig) *Handler {
+	return &Handler{
+		repo: repo,
+		cfg:  cfg,
+	}
 }
 
 /* -------------------------------------------------------------------------- */
@@ -51,7 +59,7 @@ func (h *Handler) RegisterURL(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "Adding failed")
 	}
 
-	short = fmt.Sprintf("http://localhost:8080/%s", short)
+	short = fmt.Sprintf("%s/%s", h.cfg.GetURLBase(), short)
 	return c.String(http.StatusCreated, short)
 }
 
