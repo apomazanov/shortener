@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
+
+	"github.com/labstack/echo/v5"
 )
 
 type URLRepository interface {
@@ -22,44 +23,39 @@ func New(repo URLRepository) *Handler {
 }
 
 /* -------------------------------------------------------------------------- */
-func (h *Handler) ExtractURL(w http.ResponseWriter, req *http.Request) {
-	short := strings.TrimPrefix(req.URL.Path, "/")
+func (h *Handler) ExtractURL(c *echo.Context) error {
+	short := c.Param("short")
 
 	long, ok := h.repo.Get(short)
 	if !ok {
-		http.Error(w, "URL not found", http.StatusNotFound)
-		return
+		return echo.NewHTTPError(http.StatusNotFound, "URL not found")
 	}
 
-	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set("Location", long)
-	w.WriteHeader(http.StatusTemporaryRedirect)
-	fmt.Fprintf(w, "Redirecting to %s\n", long)
+	return c.Redirect(http.StatusTemporaryRedirect, long)
 }
 
 /* -------------------------------------------------------------------------- */
-func (h *Handler) RegisterURL(w http.ResponseWriter, req *http.Request) {
-	defer req.Body.Close()
-	body, err := io.ReadAll(req.Body)
+func (h *Handler) RegisterURL(c *echo.Context) error {
+	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
-		fmt.Println(err.Error())
-		http.Error(w, "", http.StatusBadRequest)
-		return
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	short, ok := h.repo.Add(string(body))
+	body_str := string(body)
+	if body_str == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "No URL passed")
+	}
+
+	short, ok := h.repo.Add(body_str)
 	if !ok {
-		http.Error(w, "Adding failed", http.StatusServiceUnavailable)
-		return
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "Adding failed")
 	}
-	respBody := fmt.Sprintf("http://localhost:8080/%s", short)
 
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte(respBody))
+	short = fmt.Sprintf("http://localhost:8080/%s", short)
+	return c.String(http.StatusCreated, short)
 }
 
 /* -------------------------------------------------------------------------- */
-func (h *Handler) Reject(w http.ResponseWriter, req *http.Request) {
-	http.Error(w, "", http.StatusBadRequest)
+func (h *Handler) Reject(c *echo.Context) error {
+	return echo.NewHTTPError(http.StatusBadRequest, "")
 }

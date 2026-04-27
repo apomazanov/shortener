@@ -5,7 +5,7 @@ import (
 )
 
 type InMemoryRepository struct {
-	data  map[string]string
+	data    map[string]string
 	counter int
 }
 

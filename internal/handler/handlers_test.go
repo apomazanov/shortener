@@ -1,12 +1,13 @@
 package handler
 
 import (
-	"io"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -14,7 +15,7 @@ import (
 /* ----------------------------- Repository mock ---------------------------- */
 type repoMock struct {
 	value string
-	ok bool
+	ok    bool
 }
 
 func newRepoMock() *repoMock {
@@ -33,160 +34,127 @@ func (r *repoMock) Get(short string) (string, bool) {
 func TestHandler_Register(t *testing.T) {
 	r := newRepoMock()
 	h := New(r)
+	e := echo.New()
 
-	type expected struct {
-		status int
-		contentType string
-		body string
-	}
+	// TODO: io.ReadAll() error simulation
 
-	tests := []struct {
-		name string
-		expected expected
-		mocked repoMock
-	} {
-		{
-			name: "success",
-			expected: expected{
-				status: http.StatusCreated,
-				contentType: "text/plain",
-				body: "http://localhost:8080/short1",
-			},
-			mocked: repoMock{
-				value: "short1",
-				ok: true,
-			},
-		},
-		{
-			name: "repo internal error",
-			expected: expected{
-				status: http.StatusServiceUnavailable,
-				contentType: "text/plain",
-				body: "Adding failed\n",
-			},
-			mocked: repoMock{
-				value: "",
-				ok: false,
-			},
-		},
+	t.Run("empty body", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(""))
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		// mocking response from repo
+		r.value = ""
+		r.ok = false
 
-		// TODO: io.ReadAll() error simulation
-	}
+		err := h.RegisterURL(c)
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			// pre-test configuration
-			request := httptest.NewRequest(http.MethodPost, "/", nil)
-			w := httptest.NewRecorder()
-			r.value = test.mocked.value
-			r.ok = test.mocked.ok
+		require.Error(t, err)
+		var errHttp *echo.HTTPError
+		if errors.As(err, &errHttp) {
+			assert.Equal(t, http.StatusBadRequest, errHttp.Code)
+			assert.Equal(t, "No URL passed", errHttp.Message)
+		}
+	})
 
-			// run handler
-			h.RegisterURL(w, request)
+	t.Run("repo internal error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("abracadabra"))
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		// mocking response from repo
+		r.value = ""
+		r.ok = false
 
-			// getting results
-			res := w.Result()
-			defer res.Body.Close()
-			resBody, err := io.ReadAll(res.Body)
+		err := h.RegisterURL(c)
 
-			// checking
-			require.NoError(t, err)
-			assert.Equal(t, test.expected.status, res.StatusCode)
-			assert.True(t, strings.HasPrefix(res.Header.Get("Content-Type"), test.expected.contentType))
-			assert.Equal(t, test.expected.body, string(resBody))
-		})
-	}
+		require.Error(t, err)
+		var errHttp *echo.HTTPError
+		if errors.As(err, &errHttp) {
+			assert.Equal(t, http.StatusServiceUnavailable, errHttp.Code)
+			assert.Equal(t, "Adding failed", errHttp.Message)
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("abracadabra"))
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		// mocking response from repo
+		r.value = "short1"
+		r.ok = true
+
+		err := h.RegisterURL(c)
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusCreated, resp.Code)
+		assert.Equal(t, "http://localhost:8080/short1", resp.Body.String())
+	})
 }
 
 /* -------------------------------------------------------------------------- */
 func TestHandler_Extract(t *testing.T) {
 	r := newRepoMock()
 	h := New(r)
+	e := echo.New()
 
-	type expected struct {
-		status int
-		contentType string
-		location string
-		body string
-	}
-
-	tests := []struct {
-		name string
-		expected expected
-		mocked repoMock
-	} {
-		{
-			name: "success",
-			expected: expected{
-				status: http.StatusTemporaryRedirect,
-				contentType: "text/plain",
-				location: "abracadabra1",
-				body: "Redirecting to abracadabra1\n",
-			},
-			mocked: repoMock{
-				value: "abracadabra1",
-				ok: true,
-			},
-		},
-		{
-			name: "not found",
-			expected: expected{
-				status: http.StatusNotFound,
-				contentType: "text/plain",
-				body: "URL not found\n",
-			},
-			mocked: repoMock{
-				value: "",
-				ok: false,
-			},
-		},
-
-		// TODO: io.ReadAll() error simulation
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			// pre-test configuration
-			request := httptest.NewRequest(http.MethodGet, "/", nil) // path is dummy, routing not checked
-			w := httptest.NewRecorder()
-			r.value = test.mocked.value
-			r.ok = test.mocked.ok
-
-			// run handler
-			h.ExtractURL(w, request)
-
-			// getting results
-			res := w.Result()
-			defer res.Body.Close()
-			resBody, err := io.ReadAll(res.Body)
-
-			// checking
-			require.NoError(t, err)
-			assert.Equal(t, test.expected.status, res.StatusCode)
-			assert.True(t, strings.HasPrefix(res.Header.Get("Content-Type"), test.expected.contentType))
-			assert.Equal(t, test.expected.body, string(resBody))
+	t.Run("success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil) // path is dummy, routing not checked
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		c.SetPath("/:short")
+		c.SetPathValues(echo.PathValues{
+			{Name: "short", Value: "short_URL"}, // value doesn't matter
 		})
-	}
+		// mocking response from repo
+		r.value = "abracadabra1"
+		r.ok = true
+
+		err := h.ExtractURL(c)
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusTemporaryRedirect, resp.Code)
+		assert.Equal(t, "abracadabra1", resp.Header().Get("Location"))
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil) // path is dummy, routing not checked
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		c.SetPath("/:short")
+		c.SetPathValues(echo.PathValues{
+			{Name: "short", Value: "short_URL"}, // value doesn't matter
+		})
+		// mocking response from repo
+		r.value = ""
+		r.ok = false
+
+		err := h.ExtractURL(c)
+
+		require.Error(t, err)
+		var errHttp *echo.HTTPError
+		if errors.As(err, &errHttp) {
+			assert.Equal(t, http.StatusNotFound, errHttp.Code)
+			assert.Equal(t, "URL not found", errHttp.Message)
+		}
+	})
+
 }
 
 /* -------------------------------------------------------------------------- */
 func TestHandler_Reject(t *testing.T) {
 	r := newRepoMock()
 	h := New(r)
-
+	e := echo.New()
 
 	t.Run("return BadRequest", func(t *testing.T) {
-			// pre-test configuration
-			request := httptest.NewRequest(http.MethodPost, "/", nil)
-			w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
 
-			// run handler
-			h.Reject(w, request)
+		err := h.Reject(c)
 
-			// getting results
-			res := w.Result()
-
-			// checking
-			assert.Equal(t, http.StatusBadRequest, res.StatusCode)
-		})
+		require.Error(t, err)
+		http_err, ok := err.(*echo.HTTPError)
+		require.True(t, ok)
+		assert.Equal(t, http.StatusBadRequest, http_err.Code)
+	})
 }

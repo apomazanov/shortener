@@ -1,7 +1,7 @@
 package main
 
 import (
-	"net/http"
+	"github.com/labstack/echo/v5"
 
 	"github.com/apomazanov/shortener/internal/handler"
 	"github.com/apomazanov/shortener/internal/repository"
@@ -9,16 +9,16 @@ import (
 
 /* -------------------------------------------------------------------------- */
 func main() {
-	repo := repository.NewInMemoryRepo();
-	handler := handler.New(repo)
-	
-	mux := http.NewServeMux()
-	mux.HandleFunc(`GET /{id}`, handler.ExtractURL)
-	mux.HandleFunc(`POST /`, handler.RegisterURL)
-	mux.HandleFunc(`/{path...}`, handler.Reject)
+	r := repository.NewInMemoryRepo()
+	h := handler.New(r)
 
-	err := http.ListenAndServe(`127.0.0.1:8080`, mux)
+	e := echo.New()
 
+	e.RouteNotFound("/*", h.Reject)
+	e.GET("/:short", h.ExtractURL)
+	e.POST("/", h.RegisterURL)
+
+	err := e.Start("127.0.0.1:8080")
 	if err != nil {
 		panic(err)
 	}
