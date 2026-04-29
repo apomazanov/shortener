@@ -7,6 +7,7 @@ import (
 type InMemoryRepository struct {
 	data    map[string]string
 	counter int
+	// TODO: mutex
 }
 
 /* -------------------------------------------------------------------------- */

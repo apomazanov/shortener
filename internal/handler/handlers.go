@@ -9,8 +9,8 @@ import (
 )
 
 type URLRepository interface {
-	Add(long string) (string, bool)
-	Get(short string) (string, bool)
+	Add(long string) (short string, ok bool)
+	Get(short string) (long string, ok bool)
 }
 
 type URLConfig interface {
@@ -56,7 +56,7 @@ func (h *Handler) RegisterURL(c *echo.Context) error {
 
 	short, ok := h.repo.Add(body_str)
 	if !ok {
-		return echo.NewHTTPError(http.StatusServiceUnavailable, "Adding failed")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Adding failed")
 	}
 
 	short = fmt.Sprintf("%s/%s", h.cfg.GetURLBase(), short)

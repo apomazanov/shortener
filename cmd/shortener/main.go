@@ -18,6 +18,7 @@ func main() {
 	flag.StringVar(&cfg.ServerPort, "a", ":8080", "HTTP-server address:port")
 	flag.Parse()
 
+	// TODO: service layer
 	r := repository.NewInMemoryRepo()
 	h := handler.New(r, cfg)
 
@@ -27,6 +28,7 @@ func main() {
 	e.GET("/:short", h.ExtractURL)
 	e.POST("/", h.RegisterURL)
 
+	// TODO: graceful shutdown
 	err := e.Start(cfg.GetServerAddress())
 	if err != nil {
 		panic(err)

@@ -75,7 +75,7 @@ func TestHandler_Register(t *testing.T) {
 		require.Error(t, err)
 		var errHttp *echo.HTTPError
 		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusServiceUnavailable, errHttp.Code)
+			assert.Equal(t, http.StatusInternalServerError, errHttp.Code)
 			assert.Equal(t, "Adding failed", errHttp.Message)
 		}
 	})
