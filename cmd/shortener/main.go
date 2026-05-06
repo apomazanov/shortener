@@ -1,7 +1,9 @@
 package main
 
 import (
-	"flag"
+	"fmt"
+	"net/http"
+	"os"
 
 	"github.com/labstack/echo/v5"
 
@@ -10,13 +12,12 @@ import (
 	"github.com/apomazanov/shortener/internal/repository"
 )
 
-/* -------------------------------------------------------------------------- */
-func main() {
-	cfg := &config.Config{}
-
-	flag.StringVar(&cfg.BaseURL, "b", "http://localhost:8080", "Base URL for aliases")
-	flag.StringVar(&cfg.ServerPort, "a", ":8080", "HTTP-server address:port")
-	flag.Parse()
+func run() error {
+	// TODO: pass EnvVars as arguments ???
+	cfg, err := config.New(os.Args[1:])
+	if err != nil {
+		return err
+	}
 
 	// TODO: service layer
 	r := repository.NewInMemoryRepo()
@@ -29,8 +30,13 @@ func main() {
 	e.POST("/", h.RegisterURL)
 
 	// TODO: graceful shutdown
-	err := e.Start(cfg.GetServerAddress())
-	if err != nil {
-		panic(err)
+	return e.Start(cfg.GetServerAddress())
+}
+
+/* -------------------------------------------------------------------------- */
+func main() {
+	if err := run(); err != nil && err != http.ErrServerClosed {
+		fmt.Fprintf(os.Stderr, "Application terminated: %v\r\n", err)
+		os.Exit(1)
 	}
 }
