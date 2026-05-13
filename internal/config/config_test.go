@@ -10,18 +10,21 @@ import (
 /* -------------------------------------------------------------------------- */
 func TestConfigGetters(t *testing.T) {
 
-	cfg := Config{BaseURL: "real base", ServerAddr: "true server port"}
+	cfg := Config{BaseURL: "real base", ServerAddr: "true server port", AliasSize: 3}
 
-	baseURL := cfg.GetURLBase()
+	baseURL := cfg.GetUrlBase()
 	assert.Equal(t, "real base", baseURL)
 
 	serverPort := cfg.GetServerAddress()
 	assert.Equal(t, "true server port", serverPort)
+
+	aliasSize := cfg.GetAliasSize()
+	assert.Equal(t, 3, aliasSize)
 }
 
 /* -------------------------------------------------------------------------- */
 func TestConfigNew_Default(t *testing.T) {
-	args := []string {}
+	args := []string{}
 
 	cfg, err := New(args)
 
@@ -33,7 +36,7 @@ func TestConfigNew_Default(t *testing.T) {
 
 /* -------------------------------------------------------------------------- */
 func TestConfigNew_Flags(t *testing.T) {
-	args := []string {"-b", "http://fl.ag", "-a", ":9999"}
+	args := []string{"-b", "http://fl.ag", "-a", ":9999"}
 
 	cfg, err := New(args)
 
@@ -45,7 +48,7 @@ func TestConfigNew_Flags(t *testing.T) {
 
 /* -------------------------------------------------------------------------- */
 func TestConfigNew_FlagsError(t *testing.T) {
-	args := []string {"-c", "trash", "-d", ":trash"}
+	args := []string{"-c", "trash", "-d", ":trash"}
 
 	cfg, err := New(args)
 
@@ -55,7 +58,7 @@ func TestConfigNew_FlagsError(t *testing.T) {
 
 /* -------------------------------------------------------------------------- */
 func TestConfigNew_Env(t *testing.T) {
-	args := []string {"-b", "http://fl.ag", "-a", ":9999"}
+	args := []string{"-b", "http://fl.ag", "-a", ":9999"}
 
 	t.Setenv("SERVER_ADDRESS", ":1001")
 	t.Setenv("BASE_URL", "http://en.v")

@@ -1,75 +1,66 @@
 package repository
 
 import (
-	"fmt"
+	"context"
 	"testing"
 
+	"github.com/apomazanov/shortener/internal/domain"
 	"github.com/stretchr/testify/assert"
 )
 
 /* -------------------------------------------------------------------------- */
-func TestRepoMemory_Add(t *testing.T) {
-
+func TestNewInMemoryRepo(t *testing.T) {
 	repo := NewInMemoryRepo()
-
-	type expected struct {
-		value string
-		ok    bool
-	}
-
-	tests := []struct {
-		name     string
-		expected expected
-	}{
-		{
-			name: "first add",
-			expected: expected{
-				value: "short1",
-				ok:    true, // always true while in-memory storage used
-			},
-		},
-		{
-			name: "second add",
-			expected: expected{
-				value: "short2",
-				ok:    true,
-			},
-		},
-		{
-			name: "third add",
-			expected: expected{
-				value: "short3",
-				ok:    true,
-			},
-		},
-	}
-
-	for i, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			result, ok := repo.Add(fmt.Sprintf("abracadabra%d", i))
-			assert.Equal(t, test.expected.ok, ok)
-			assert.Equal(t, test.expected.value, result)
-		})
-	}
+	assert.NotNil(t, repo)
+	assert.NotNil(t, repo.data)
 }
 
 /* -------------------------------------------------------------------------- */
-func TestRepoMemory_Get(t *testing.T) {
-
+func TestInMemoryRepo_Save(t *testing.T) {
 	repo := NewInMemoryRepo()
-	repo.data["short1"] = "abracadabra1"
-	repo.data["short2"] = "abracadabra2"
-	repo.data["short3"] = "abracadabra3"
+	ctx := context.Background()
 
-	t.Run("success", func(t *testing.T) {
-		result, ok := repo.Get("short1")
-		assert.Equal(t, "abracadabra1", result)
-		assert.True(t, ok)
+	t.Run("save successful", func(t *testing.T) {
+		alias := "short1"
+		original := "http://google.com"
+
+		err := repo.Save(ctx, alias, original)
+
+		assert.NoError(t, err)
+		assert.Equal(t, original, repo.data[alias])
+	})
+
+	t.Run("save duplicate", func(t *testing.T) {
+		alias := "dup"
+		repo.data[alias] = "http://first.com"
+
+		err := repo.Save(ctx, alias, "http://second.com")
+
+		assert.ErrorIs(t, err, domain.ErrDuplicate)
+		assert.Equal(t, "http://first.com", repo.data[alias])
+	})
+}
+
+/* -------------------------------------------------------------------------- */
+func TestInMemoryRepo_Get(t *testing.T) {
+	repo := NewInMemoryRepo()
+	ctx := context.Background()
+
+	const alias = "exists"
+	const original = "http://example.com"
+	repo.data[alias] = original
+
+	t.Run("get existing", func(t *testing.T) {
+		res, err := repo.Get(ctx, alias)
+
+		assert.NoError(t, err)
+		assert.Equal(t, original, res)
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		result, ok := repo.Get("short4")
-		assert.Equal(t, "", result)
-		assert.False(t, ok)
+		res, err := repo.Get(ctx, "nonexistent")
+
+		assert.Empty(t, res)
+		assert.ErrorIs(t, err, domain.ErrNotFound)
 	})
 }

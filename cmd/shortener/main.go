@@ -1,17 +1,23 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"os"
 
 	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 
 	"github.com/apomazanov/shortener/internal/config"
-	"github.com/apomazanov/shortener/internal/handler"
+	"github.com/apomazanov/shortener/internal/handlers"
 	"github.com/apomazanov/shortener/internal/repository"
+	"github.com/apomazanov/shortener/internal/routes"
+	"github.com/apomazanov/shortener/internal/service"
+	"github.com/apomazanov/shortener/pkg/logger"
+
+	my_middleware "github.com/apomazanov/shortener/internal/middleware"
 )
 
+/* -------------------------------------------------------------------------- */
 func run() error {
 	// TODO: pass EnvVars as arguments ???
 	cfg, err := config.New(os.Args[1:])
@@ -19,24 +25,31 @@ func run() error {
 		return err
 	}
 
-	// TODO: service layer
+	l := logger.New() // TODO: level from config
 	r := repository.NewInMemoryRepo()
-	h := handler.New(r, cfg)
+	s := service.New(r, l)
+	h := handlers.New(s, cfg, l)
 
 	e := echo.New()
+	e.Use(middleware.RequestID())
+	e.Use(my_middleware.Zerologger(l))
+	e.Use(middleware.Recover())
 
-	e.RouteNotFound("/*", h.Reject)
-	e.GET("/:short", h.ExtractURL)
-	e.POST("/", h.RegisterURL)
+	routes.Setup(e, h)
 
 	// TODO: graceful shutdown
-	return e.Start(cfg.GetServerAddress())
+	err = e.Start(cfg.GetServerAddress())
+	if err != nil {
+		l.Fatal().
+			Err(err).
+			Msg("application terminated")
+	}
+	return err
 }
 
 /* -------------------------------------------------------------------------- */
 func main() {
 	if err := run(); err != nil && err != http.ErrServerClosed {
-		fmt.Fprintf(os.Stderr, "Application terminated: %v\r\n", err)
 		os.Exit(1)
 	}
 }

@@ -26,7 +26,7 @@ func main() {
 	}
 	if err := reader.Err(); err != nil {
 		fmt.Println(err)
-		return 
+		return
 	}
 	// заполняем контейнер данными
 	data.Set("url", long)
@@ -38,7 +38,7 @@ func main() {
 	request, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(data.Encode()))
 	if err != nil {
 		fmt.Println(err)
-		return 
+		return
 	}
 	// в заголовках запроса указываем кодировку
 	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
@@ -46,7 +46,7 @@ func main() {
 	response, err := client.Do(request)
 	if err != nil {
 		fmt.Println(err)
-		return 
+		return
 	}
 	defer func() {
 		io.Copy(io.Discard, response.Body)
@@ -58,7 +58,7 @@ func main() {
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		fmt.Println(err)
-		return 
+		return
 	}
 	// и печатаем его
 	fmt.Println(string(body))

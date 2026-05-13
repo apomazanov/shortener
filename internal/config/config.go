@@ -7,16 +7,19 @@ import (
 )
 
 type Config struct {
-	ServerAddr string	`env:"SERVER_ADDRESS"`
-	BaseURL    string	`env:"BASE_URL"`
+	ServerAddr string `env:"SERVER_ADDRESS"`
+	BaseURL    string `env:"BASE_URL"`
+	AliasSize  int    `env:"ALIAS_SIZE"`
 }
 
+/* -------------------------------------------------------------------------- */
 func New(args []string) (*Config, error) {
 	// Default values are set here
 
 	cfg := Config{
 		ServerAddr: ":8080",
-		BaseURL: "http://localhost:8080",
+		BaseURL:    "http://localhost:8080",
+		AliasSize:  6,
 	}
 
 	// Flags overwrite default values
@@ -39,10 +42,17 @@ func New(args []string) (*Config, error) {
 	return &cfg, nil
 }
 
+/* -------------------------------------------------------------------------- */
 func (c *Config) GetServerAddress() string {
 	return c.ServerAddr
 }
 
-func (c *Config) GetURLBase() string {
+/* -------------------------------------------------------------------------- */
+func (c *Config) GetUrlBase() string {
 	return c.BaseURL
+}
+
+/* -------------------------------------------------------------------------- */
+func (c *Config) GetAliasSize() int {
+	return c.AliasSize
 }
