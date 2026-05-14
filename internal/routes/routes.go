@@ -9,6 +9,7 @@ import (
 func Setup(e *echo.Echo, userHandler *handlers.Handler) {
 
 	e.GET("/:short", userHandler.Get)
-	e.POST("/", userHandler.Create)
+	e.POST("/", userHandler.CreateText)
+	e.POST("/api/shorten", userHandler.CreateJson)
 	e.RouteNotFound("/*", userHandler.Reject)
 }

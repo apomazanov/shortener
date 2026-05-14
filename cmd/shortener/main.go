@@ -12,6 +12,7 @@ import (
 	"github.com/apomazanov/shortener/internal/repository"
 	"github.com/apomazanov/shortener/internal/routes"
 	"github.com/apomazanov/shortener/internal/service"
+	"github.com/apomazanov/shortener/internal/validator"
 	"github.com/apomazanov/shortener/pkg/logger"
 
 	my_middleware "github.com/apomazanov/shortener/internal/middleware"
@@ -31,6 +32,8 @@ func run() error {
 	h := handlers.New(s, cfg, l)
 
 	e := echo.New()
+	e.Validator = validator.New()
+
 	e.Use(middleware.RequestID())
 	e.Use(my_middleware.Zerologger(l))
 	e.Use(middleware.Recover())

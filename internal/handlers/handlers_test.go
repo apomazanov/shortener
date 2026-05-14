@@ -46,40 +46,53 @@ func (c *cfgMock) GetAliasSize() int {
 	return c.aliasSize
 }
 
+/* ----------------------------- Validator mock ----------------------------- */
+type valMock struct {
+	err error
+}
+
+func (v *valMock) Validate(i any) error {
+	return v.err
+}
+
 /* -------------------------------------------------------------------------- */
-func TestHandler_Create(t *testing.T) {
+func TestHandler_CreateText(t *testing.T) {
 	s := &serviceMock{}
 	l := zerolog.New(os.Stdout)
 	cfg := &cfgMock{baseURL: "ba.se", aliasSize: 6}
 	h := New(s, cfg, &l)
+	v := valMock{}
 	e := echo.New()
+	e.Validator = &v
 
 	// TODO: io.ReadAll() error simulation
 
-	t.Run("empty body", func(t *testing.T) {
+	t.Run("validation error", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(""))
 		resp := httptest.NewRecorder()
 		c := e.NewContext(req, resp)
+		v.err = errors.New("validation error")
 
-		err := h.Create(c)
+		err := h.CreateText(c)
 
 		require.Error(t, err)
 		var errHttp *echo.HTTPError
 		if errors.As(err, &errHttp) {
 			assert.Equal(t, http.StatusBadRequest, errHttp.Code)
-			assert.Equal(t, "No URL passed", errHttp.Message)
+			assert.Equal(t, "validation error", errHttp.Message)
 		}
 	})
 
 	t.Run("service error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("abracadabra"))
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("google.com"))
 		resp := httptest.NewRecorder()
 		c := e.NewContext(req, resp)
 		// mocking response from service
 		s.alias = ""
 		s.err = errors.New("some error")
+		v.err = nil
 
-		err := h.Create(c)
+		err := h.CreateText(c)
 
 		require.Error(t, err)
 		var errHttp *echo.HTTPError
@@ -90,18 +103,101 @@ func TestHandler_Create(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("abracadabra"))
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("google.com"))
 		resp := httptest.NewRecorder()
 		c := e.NewContext(req, resp)
 		// mocking response from service
 		s.alias = "short1"
 		s.err = nil
+		v.err = nil
 
-		err := h.Create(c)
+		err := h.CreateText(c)
 
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusCreated, resp.Code)
 		assert.Equal(t, cfg.baseURL+"/short1", resp.Body.String())
+	})
+}
+
+/* -------------------------------------------------------------------------- */
+func TestHandler_CreateJson(t *testing.T) {
+	s := &serviceMock{}
+	l := zerolog.New(os.Stdout)
+	cfg := &cfgMock{baseURL: "ba.se", aliasSize: 6}
+	h := New(s, cfg, &l)
+	v := valMock{}
+	e := echo.New()
+	e.Validator = &v
+
+	t.Run("malformed json body", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("invalid json"))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		v.err = nil
+
+		err := h.CreateJson(c)
+
+		require.Error(t, err)
+		var errHttp *echo.HTTPError
+		if errors.As(err, &errHttp) {
+			assert.Equal(t, http.StatusBadRequest, errHttp.Code)
+			// Сообщение об ошибке от c.Bind может варьироваться (например, "syntax error"),
+			// поэтому просто проверяем, что оно не пустое.
+			assert.NotEmpty(t, errHttp.Message)
+		}
+	})
+
+	t.Run("validation error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"url": ""}`))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		v.err = errors.New("validation error")
+
+		err := h.CreateJson(c)
+
+		require.Error(t, err)
+		var errHttp *echo.HTTPError
+		if errors.As(err, &errHttp) {
+			assert.Equal(t, http.StatusBadRequest, errHttp.Code)
+			assert.Equal(t, "validation error", errHttp.Message)
+		}
+	})
+
+	t.Run("service error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"url": "https://google.com"}`))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		s.alias = ""
+		s.err = errors.New("some service error")
+		v.err = nil
+
+		err := h.CreateJson(c)
+
+		require.Error(t, err)
+		var errHttp *echo.HTTPError
+		if errors.As(err, &errHttp) {
+			assert.Equal(t, http.StatusInternalServerError, errHttp.Code)
+			assert.Equal(t, "Aliasing failed", errHttp.Message)
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"url": "https://google.com"}`))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		s.alias = "short1"
+		s.err = nil
+		v.err = nil
+
+		err := h.CreateJson(c)
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusCreated, resp.Code)
+		assert.JSONEq(t, `{"result":"ba.se/short1"}`, resp.Body.String())
 	})
 }
 

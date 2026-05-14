@@ -28,6 +28,14 @@ type Handler struct {
 	log *zerolog.Logger
 }
 
+type jsonShortenRequest struct {
+	Url string `json:"url" validate:"required,url"`
+}
+
+type jsonShortenResponse struct {
+	Result string `json:"result"`
+}
+
 /* -------------------------------------------------------------------------- */
 func New(s Service, c UrlConfig, l *zerolog.Logger) *Handler {
 	return &Handler{
@@ -66,9 +74,9 @@ func (h *Handler) Get(c *echo.Context) error {
 }
 
 /* -------------------------------------------------------------------------- */
-func (h *Handler) Create(c *echo.Context) error {
+func (h *Handler) CreateText(c *echo.Context) error {
 
-	log := h.log.With().Str("op", "handler.Create").Logger()
+	log := h.log.With().Str("op", "handler.CreateText").Logger()
 
 	// Raw context for deeper layers, evading 'echo' dependency
 	ctx := c.Request().Context()
@@ -84,16 +92,18 @@ func (h *Handler) Create(c *echo.Context) error {
 	}
 
 	// Casting body to string, validating
-	original := string(body)
-	if original == "" {
+	requestData := jsonShortenRequest{Url: string(body)}
+	if err := c.Validate(&requestData); err != nil {
 		log.Warn().
-			Msg("no URL to shorten in request")
+			Err(err).
+			Any("request_data", requestData).
+			Msg("invalid request data")
 
-		return echo.NewHTTPError(http.StatusBadRequest, "No URL passed")
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	// Getting alias
-	alias, err := h.srv.CreateUrlAlias(ctx, original)
+	alias, err := h.srv.CreateUrlAlias(ctx, requestData.Url)
 	if err != nil {
 		// logged in service layer
 		return echo.NewHTTPError(http.StatusInternalServerError, "Aliasing failed")
@@ -102,6 +112,48 @@ func (h *Handler) Create(c *echo.Context) error {
 	// Sending back short URL
 	shortUrl, _ := url.JoinPath(h.cfg.GetUrlBase(), alias)
 	return c.String(http.StatusCreated, shortUrl)
+}
+
+/* -------------------------------------------------------------------------- */
+func (h *Handler) CreateJson(c *echo.Context) error {
+	var requestData jsonShortenRequest
+	var responseData jsonShortenResponse
+
+	log := h.log.With().Str("op", "handler.CreateJson").Logger()
+
+	// Raw context for deeper layers, evading 'echo' dependency
+	ctx := c.Request().Context()
+
+	// Reading body
+
+	if err := c.Bind(&requestData); err != nil {
+		log.Error().
+			Err(err).
+			Msg("failed to read request body")
+
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	// Validating
+	if err := c.Validate(&requestData); err != nil {
+		log.Warn().
+			Err(err).
+			Any("request_data", requestData).
+			Msg("invalid request data")
+
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	// Getting alias
+	alias, err := h.srv.CreateUrlAlias(ctx, requestData.Url)
+	if err != nil {
+		// logged in service layer
+		return echo.NewHTTPError(http.StatusInternalServerError, "Aliasing failed")
+	}
+
+	// Sending back short URL
+	responseData.Result, _ = url.JoinPath(h.cfg.GetUrlBase(), alias)
+	return c.JSON(http.StatusCreated, responseData)
 }
 
 /* -------------------------------------------------------------------------- */
