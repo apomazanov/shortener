@@ -34,9 +34,14 @@ func run() error {
 	e := echo.New()
 	e.Validator = validator.New()
 
-	e.Use(middleware.RequestID())
-	e.Use(my_middleware.Zerologger(l))
-	e.Use(middleware.Recover())
+	e.Use(middleware.Recover()) // always first to catch all following panics
+	e.Use(middleware.RequestID()) // before logger, otherwise no requestIDs in logs
+	e.Use(my_middleware.Zerologger(l)) // before other middlewares (full monitoring)
+	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
+		MinLength: 1024,
+	}))
+	e.Use(middleware.Decompress())
+	e.Use(middleware.BodyLimit(5_242_880)) // 5 Mb, avoiding OOM killer
 
 	routes.Setup(e, h)
 
