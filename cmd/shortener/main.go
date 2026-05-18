@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 	"os"
 
@@ -23,11 +24,18 @@ func run() error {
 	// TODO: pass EnvVars as arguments ???
 	cfg, err := config.New(os.Args[1:])
 	if err != nil {
-		return err
+		// logger not initialized yet, using default log
+		log.Fatalf("config error: %v\n", err)
 	}
 
 	l := logger.New() // TODO: level from config
-	r := repository.NewInMemoryRepo()
+
+	r, err := repository.NewFileRepo(cfg, l)
+	if err != nil {
+		// logged in repo layer
+		return err
+	}
+
 	s := service.New(r, l)
 	h := handlers.New(s, cfg, l)
 
@@ -40,7 +48,7 @@ func run() error {
 	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
 		MinLength: 1024,
 	}))
-	e.Use(middleware.Decompress())
+	e.Use(middleware.Decompress()) // strictly before body limit
 	e.Use(middleware.BodyLimit(5_242_880)) // 5 Mb, avoiding OOM killer
 
 	routes.Setup(e, h)
