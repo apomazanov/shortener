@@ -95,6 +95,30 @@ func TestFileRepo(t *testing.T) {
 		assert.Equal(t, original, cached)
 	})
 
+	t.Run("UUID generation and increment", func(t *testing.T) {
+		testFile := filepath.Join(t.TempDir(), "uuid.json")
+		repo, err := NewFileRepo(&mockRepoConfig{file: testFile}, &logger)
+		require.NoError(t, err)
+		ctx := context.Background()
+
+		// Save first entry
+		err = repo.Save(ctx, "alias1", "http://url1.com")
+		require.NoError(t, err)
+		// With the current file.go, this assertion will fail as r.lastUuid is not updated.
+		// It should be 1.
+		assert.Equal(t, 1, repo.lastUuid, "lastUuid should be 1 after first save")
+
+		// Save second entry
+		err = repo.Save(ctx, "alias2", "http://url2.com")
+		require.NoError(t, err)
+		// With the current file.go, this assertion will fail as r.lastUuid is not updated.
+		// It should be 2.
+		assert.Equal(t, 2, repo.lastUuid, "lastUuid should be 2 after second save")
+
+		// Verify persistence of UUIDs by reloading
+		// This is covered by the Persistence test, but good to keep in mind.
+	})
+
 	t.Run("Get Not Found", func(t *testing.T) {
 		repo, err := NewFileRepo(cfg, &logger)
 		require.NoError(t, err)
@@ -104,12 +128,14 @@ func TestFileRepo(t *testing.T) {
 		assert.ErrorIs(t, err, domain.ErrNotFound)
 	})
 
-	t.Run("NewFileRepo Invalid Path", func(t *testing.T) {
-		// directory /nonexistent_path_test does not exist
-		badCfg := &mockRepoConfig{file: "/nonexistent_path_test/db.json"}
-		repo, err := NewFileRepo(badCfg, &logger)
+	t.Run("NewFileRepo creates nested directories", func(t *testing.T) {
+		// проверяем, что NewFileRepo создает вложенные директории, если они отсутствуют
+		nestedFile := filepath.Join(t.TempDir(), "a", "b", "c", "db.json")
+		nestedCfg := &mockRepoConfig{file: nestedFile}
 
-		assert.Error(t, err)
-		assert.Nil(t, repo)
+		repo, err := NewFileRepo(nestedCfg, &logger)
+		require.NoError(t, err)
+		assert.NotNil(t, repo)
+		assert.FileExists(t, nestedFile)
 	})
 }

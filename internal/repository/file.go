@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/apomazanov/shortener/internal/domain"
@@ -13,10 +14,10 @@ import (
 )
 
 type FileRepo struct {
-	file string
-	mu   sync.RWMutex
-	log  *zerolog.Logger
-	cache map[string]string
+	file     string
+	mu       sync.RWMutex
+	log      *zerolog.Logger
+	cache    map[string]string
 	lastUuid int
 }
 
@@ -25,7 +26,7 @@ type RepoConfig interface {
 }
 
 type entry struct {
-	Uuid     int `json:"uuid"`
+	Uuid     int    `json:"uuid"`
 	Alias    string `json:"alias"`
 	Original string `json:"original"`
 }
@@ -37,15 +38,30 @@ func NewFileRepo(cfg RepoConfig, l *zerolog.Logger) (*FileRepo, error) {
 
 	// Create storage file, if not exists
 
-	file, err := os.OpenFile(repo.file, os.O_CREATE | os.O_RDONLY, 0o644)
+	// Directories
+	dir := filepath.Dir(repo.file)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		repo.log.Error().
+			Str("op", "repository.NewFileRepo").
+			Err(err).
+			Msg("could not create directories for storage file")
+		return nil, err
+	}
+
+	// File
+	file, err := os.OpenFile(repo.file, os.O_CREATE|os.O_RDONLY, 0o644)
 	if err != nil {
 		repo.log.Error().
 			Str("op", "repository.NewFileRepo").
 			Err(err).
-			Msg("storage file creation failed")
+			Msg("could not create storage file")
 		return nil, err
 	}
 	defer file.Close()
+
+	repo.log.Info().
+			Str("op", "repository.NewFileRepo").
+			Msg(fmt.Sprintf("created file: %v\n", repo.file))
 
 	// Read existing file (empty, if new) to fill aliases cache
 
@@ -103,7 +119,7 @@ func (r *FileRepo) Save(ctx context.Context, alias string, original string) erro
 	// Appending
 
 	// Opening file
-	f, err := os.OpenFile(r.file, os.O_APPEND | os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(r.file, os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		r.log.Error().
 			Str("op", "repository.Save").
@@ -141,6 +157,7 @@ func (r *FileRepo) Save(ctx context.Context, alias string, original string) erro
 
 	// Updating cache, if data write was successful
 	r.cache[alias] = original
+	r.lastUuid = newLastUuid
 
 	return nil
 }

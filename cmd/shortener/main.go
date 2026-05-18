@@ -1,9 +1,13 @@
 package main
 
 import (
-	"log"
+	"context"
+	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
@@ -24,8 +28,8 @@ func run() error {
 	// TODO: pass EnvVars as arguments ???
 	cfg, err := config.New(os.Args[1:])
 	if err != nil {
-		// logger not initialized yet, using default log
-		log.Fatalf("config error: %v\n", err)
+		// logger not initialized yet, using fmt
+		return fmt.Errorf("config error: %w", err)
 	}
 
 	l := logger.New() // TODO: level from config
@@ -33,7 +37,7 @@ func run() error {
 	r, err := repository.NewFileRepo(cfg, l)
 	if err != nil {
 		// logged in repo layer
-		return err
+		return fmt.Errorf("repo error: %w", err)
 	}
 
 	s := service.New(r, l)
@@ -42,25 +46,32 @@ func run() error {
 	e := echo.New()
 	e.Validator = validator.New()
 
-	e.Use(middleware.Recover()) // always first to catch all following panics
-	e.Use(middleware.RequestID()) // before logger, otherwise no requestIDs in logs
+	// Middleware
+
+	e.Use(middleware.Recover())        // always first to catch all following panics
+	e.Use(middleware.RequestID())      // before logger, otherwise no requestIDs in logs
 	e.Use(my_middleware.Zerologger(l)) // before other middlewares (full monitoring)
 	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
 		MinLength: 1024,
 	}))
-	e.Use(middleware.Decompress()) // strictly before body limit
+	e.Use(middleware.Decompress())         // strictly before body limit
 	e.Use(middleware.BodyLimit(5_242_880)) // 5 Mb, avoiding OOM killer
+
+	// Routes
 
 	routes.Setup(e, h)
 
-	// TODO: graceful shutdown
-	err = e.Start(cfg.GetServerAddress())
-	if err != nil {
-		l.Fatal().
-			Err(err).
-			Msg("application terminated")
+	// Graceful shutdown
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	sc := echo.StartConfig{
+		Address:         cfg.GetServerAddress(),
+		GracefulTimeout: 10 * time.Second,
 	}
-	return err
+
+	return sc.Start(ctx, e)
 }
 
 /* -------------------------------------------------------------------------- */
