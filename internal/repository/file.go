@@ -22,7 +22,7 @@ type FileRepo struct {
 }
 
 type RepoConfig interface {
-	GetRepoFile() string
+	GetStorageFile() string
 }
 
 type entry struct {
@@ -34,7 +34,7 @@ type entry struct {
 /* -------------------------------------------------------------------------- */
 func NewFileRepo(cfg RepoConfig, l *zerolog.Logger) (*FileRepo, error) {
 
-	repo := &FileRepo{file: cfg.GetRepoFile(), log: l, cache: make(map[string]string)}
+	repo := &FileRepo{file: cfg.GetStorageFile(), log: l, cache: make(map[string]string)}
 
 	// Create storage file, if not exists
 

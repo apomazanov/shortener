@@ -10,7 +10,7 @@ type Config struct {
 	ServerAddr string `env:"SERVER_ADDRESS"`
 	BaseURL    string `env:"BASE_URL"`
 	AliasSize  int    `env:"ALIAS_SIZE"`
-	RepoFile   string `env:"REPO_FILE"`
+	StorageFile   string `env:"FILE_STORAGE_PATH"`
 }
 
 /* -------------------------------------------------------------------------- */
@@ -21,7 +21,7 @@ func New(args []string) (*Config, error) {
 		ServerAddr: ":8080",
 		BaseURL:    "http://localhost:8080",
 		AliasSize:  6,
-		RepoFile:   "./data/db.json",
+		StorageFile:   "./data/db.json",
 	}
 
 	// Flags overwrite default values
@@ -30,7 +30,7 @@ func New(args []string) (*Config, error) {
 
 	fs.StringVar(&cfg.BaseURL, "b", cfg.BaseURL, "Base URL for aliases")
 	fs.StringVar(&cfg.ServerAddr, "a", cfg.ServerAddr, "HTTP-server address:port")
-	fs.StringVar(&cfg.RepoFile, "f", cfg.RepoFile, "Storage file path")
+	fs.StringVar(&cfg.StorageFile, "f", cfg.StorageFile, "Storage file path")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -61,6 +61,6 @@ func (c *Config) GetAliasSize() int {
 }
 
 /* -------------------------------------------------------------------------- */
-func (c *Config) GetRepoFile() string {
-	return c.RepoFile
+func (c *Config) GetStorageFile() string {
+	return c.StorageFile
 }

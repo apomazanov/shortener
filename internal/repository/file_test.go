@@ -17,7 +17,7 @@ type mockRepoConfig struct {
 }
 
 /* -------------------------------------------------------------------------- */
-func (m *mockRepoConfig) GetRepoFile() string {
+func (m *mockRepoConfig) GetStorageFile() string {
 	return m.file
 }
 
