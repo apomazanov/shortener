@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
+	"github.com/rs/zerolog"
 
 	"github.com/apomazanov/shortener/internal/config"
 	"github.com/apomazanov/shortener/internal/handlers"
@@ -24,33 +26,37 @@ import (
 )
 
 /* -------------------------------------------------------------------------- */
-func run() error {
-	// TODO: pass EnvVars as arguments ???
+func run(log *zerolog.Logger) error {
+
 	cfg, err := config.New(os.Args[1:])
 	if err != nil {
-		// logger not initialized yet, using fmt
-		return fmt.Errorf("config error: %w", err)
+		return fmt.Errorf("run: config error: %w", err)
 	}
 
-	l := logger.New() // TODO: level from config
-
-	r, err := repository.NewFileRepo(cfg, l)
+	r, err := repository.NewLocalStorage(cfg, log)
 	if err != nil {
-		// logged in repo layer
-		return fmt.Errorf("repo error: %w", err)
+		return fmt.Errorf("run: repo create error: %w", err)
 	}
 
-	s := service.New(r, l)
-	h := handlers.New(s, cfg, l)
+	defer func() {
+		if err := r.Close(); err != nil {
+			log.Error().
+				Err(err).
+				Msg("run: repo close error")
+		}
+	}()
+
+	s := service.New(r)
+	h := handlers.New(s, cfg, log)
 
 	e := echo.New()
 	e.Validator = validator.New()
 
 	// Middleware
 
-	e.Use(middleware.Recover())        // always first to catch all following panics
-	e.Use(middleware.RequestID())      // before logger, otherwise no requestIDs in logs
-	e.Use(my_middleware.Zerologger(l)) // before other middlewares (full monitoring)
+	e.Use(middleware.Recover())          // always first to catch all following panics
+	e.Use(middleware.RequestID())        // before logger, otherwise no requestIDs in logs
+	e.Use(my_middleware.Zerologger(log)) // before other middlewares (full monitoring)
 	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
 		MinLength: 1024,
 	}))
@@ -76,7 +82,13 @@ func run() error {
 
 /* -------------------------------------------------------------------------- */
 func main() {
-	if err := run(); err != nil && err != http.ErrServerClosed {
+	log := logger.New()
+
+	if err := run(log); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Error().
+			Err(err).
+			Msg("application terminated")
+
 		os.Exit(1)
 	}
 }

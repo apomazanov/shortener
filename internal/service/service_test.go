@@ -3,11 +3,9 @@ package service
 import (
 	"context"
 	"errors"
-	"io"
 	"testing"
 
 	"github.com/apomazanov/shortener/internal/domain"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -28,17 +26,16 @@ func (r *repoMock) Get(ctx context.Context, alias string) (string, error) {
 }
 
 /* -------------------------------------------------------------------------- */
-func TestGetOriginalUrl(t *testing.T) {
+func TestGetOriginalURL(t *testing.T) {
 	repo := &repoMock{}
-	logger := zerolog.New(io.Discard)
-	s := New(repo, &logger)
+	s := New(repo)
 	ctx := context.Background()
 
 	t.Run("success", func(t *testing.T) {
 		repo.err = nil
 		repo.original = "http://example.com"
 
-		url, err := s.GetOriginalUrl(ctx, "alias1")
+		url, err := s.GetOriginalURL(ctx, "alias1")
 
 		assert.NoError(t, err)
 		assert.Equal(t, "http://example.com", url)
@@ -48,7 +45,7 @@ func TestGetOriginalUrl(t *testing.T) {
 		repo.err = domain.ErrNotFound
 		repo.original = ""
 
-		url, err := s.GetOriginalUrl(ctx, "unknown")
+		url, err := s.GetOriginalURL(ctx, "unknown")
 
 		assert.ErrorIs(t, err, domain.ErrNotFound)
 		assert.Empty(t, url)
@@ -59,7 +56,7 @@ func TestGetOriginalUrl(t *testing.T) {
 		repo.err = internalErr
 		repo.original = ""
 
-		url, err := s.GetOriginalUrl(ctx, "alias1")
+		url, err := s.GetOriginalURL(ctx, "alias1")
 
 		assert.ErrorIs(t, err, internalErr)
 		assert.Empty(t, url)
@@ -67,17 +64,16 @@ func TestGetOriginalUrl(t *testing.T) {
 }
 
 /* -------------------------------------------------------------------------- */
-func TestCreateUrlAlias(t *testing.T) {
+func TestCreateURLAlias(t *testing.T) {
 	repo := &repoMock{}
-	logger := zerolog.New(io.Discard)
-	s := New(repo, &logger)
+	s := New(repo)
 	ctx := context.Background()
 
 	t.Run("success first try", func(t *testing.T) {
 		repo.err = nil
 		repo.saveCalls = 0
 
-		alias, err := s.CreateUrlAlias(ctx, "http://google.com")
+		alias, err := s.CreateURLAlias(ctx, "http://google.com")
 
 		assert.NoError(t, err)
 		assert.Len(t, alias, 6)
@@ -89,7 +85,7 @@ func TestCreateUrlAlias(t *testing.T) {
 		repo.err = someErr
 		repo.saveCalls = 0
 
-		alias, err := s.CreateUrlAlias(ctx, "http://google.com")
+		alias, err := s.CreateURLAlias(ctx, "http://google.com")
 
 		assert.ErrorIs(t, err, someErr)
 		assert.Empty(t, alias)
@@ -100,7 +96,7 @@ func TestCreateUrlAlias(t *testing.T) {
 		repo.err = domain.ErrDuplicate
 		repo.saveCalls = 0
 
-		alias, err := s.CreateUrlAlias(ctx, "http://google.com")
+		alias, err := s.CreateURLAlias(ctx, "http://google.com")
 
 		assert.ErrorIs(t, err, domain.ErrSaveRetryLimitExceeded)
 		assert.Empty(t, alias)

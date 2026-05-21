@@ -13,18 +13,18 @@ import (
 )
 
 type Service interface {
-	GetOriginalUrl(ctx context.Context, alias string) (original string, err error)
-	CreateUrlAlias(ctx context.Context, original string) (alias string, err error)
+	GetOriginalURL(ctx context.Context, alias string) (original string, err error)
+	CreateURLAlias(ctx context.Context, original string) (alias string, err error)
 }
 
-type UrlConfig interface {
-	GetUrlBase() string
+type URLConfig interface {
+	GetURLBase() string
 	GetAliasSize() int
 }
 
 type Handler struct {
 	srv Service
-	cfg UrlConfig
+	cfg URLConfig
 	log *zerolog.Logger
 }
 
@@ -37,7 +37,7 @@ type jsonShortenResponse struct {
 }
 
 /* -------------------------------------------------------------------------- */
-func New(s Service, c UrlConfig, l *zerolog.Logger) *Handler {
+func New(s Service, c URLConfig, l *zerolog.Logger) *Handler {
 	return &Handler{
 		srv: s,
 		cfg: c,
@@ -48,18 +48,24 @@ func New(s Service, c UrlConfig, l *zerolog.Logger) *Handler {
 /* -------------------------------------------------------------------------- */
 func (h *Handler) Get(c *echo.Context) error {
 
+	log := h.log.With().Str("op", "handler.Get").Logger()
+
 	// Raw context for deeper layers, evading 'echo' dependency
 	ctx := c.Request().Context()
 
 	// Getting alias from request URL
-	alias := c.Param("short")
+	alias := c.Param("alias")
 
 	if len(alias) != h.cfg.GetAliasSize() {
-		return echo.NewHTTPError(http.StatusBadRequest, "alias is invalid")
+		log.Info().
+			Str("alias", alias).
+			Msg("invalid alias")
+
+		return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
 	}
 
 	// Find original URL
-	original, err := h.srv.GetOriginalUrl(ctx, alias)
+	original, err := h.srv.GetOriginalURL(ctx, alias)
 
 	if err == nil {
 		// Return original URL with redirection
@@ -67,10 +73,18 @@ func (h *Handler) Get(c *echo.Context) error {
 	}
 
 	if errors.Is(err, domain.ErrNotFound) {
-		return echo.NewHTTPError(http.StatusNotFound, "URL not found")
+		log.Info().
+			Err(err).
+			Msg("alias not found")
+
+		return echo.NewHTTPError(http.StatusNotFound, http.StatusText(http.StatusNotFound))
 	}
 
-	return echo.NewHTTPError(http.StatusInternalServerError, "Something went wrong")
+	log.Error().
+		Err(err).
+		Msg("something went wrong")
+
+	return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 }
 
 /* -------------------------------------------------------------------------- */
@@ -84,33 +98,39 @@ func (h *Handler) CreateText(c *echo.Context) error {
 	// Reading body, expecting long URL for shortening
 	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
-		log.Error().
+		log.Info().
 			Err(err).
 			Msg("failed to read request body")
 
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
 	}
 
 	// Casting body to string, validating
 	requestData := jsonShortenRequest{Url: string(body)}
 	if err := c.Validate(&requestData); err != nil {
-		log.Warn().
+		log.Info().
 			Err(err).
 			Any("request_data", requestData).
 			Msg("invalid request data")
 
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
 	}
 
 	// Getting alias
-	alias, err := h.srv.CreateUrlAlias(ctx, requestData.Url)
+	alias, err := h.srv.CreateURLAlias(ctx, requestData.Url)
 	if err != nil {
-		// logged in service layer
-		return echo.NewHTTPError(http.StatusInternalServerError, "Aliasing failed")
+		log.Error().
+			Err(err).
+			Str("alias", alias).
+			Msg("alias creation failed")
+
+		return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 	}
 
 	// Sending back short URL
-	shortUrl, _ := url.JoinPath(h.cfg.GetUrlBase(), alias)
+
+	// base URL already validated during config
+	shortUrl := h.cfg.GetURLBase() + "/" + alias
 	return c.String(http.StatusCreated, shortUrl)
 }
 
@@ -125,34 +145,37 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	// Reading body
-
 	if err := c.Bind(&requestData); err != nil {
-		log.Error().
+		log.Info().
 			Err(err).
 			Msg("failed to read request body")
 
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
 	}
 
 	// Validating
 	if err := c.Validate(&requestData); err != nil {
-		log.Warn().
+		log.Info().
 			Err(err).
 			Any("request_data", requestData).
 			Msg("invalid request data")
 
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
 	}
 
 	// Getting alias
-	alias, err := h.srv.CreateUrlAlias(ctx, requestData.Url)
+	alias, err := h.srv.CreateURLAlias(ctx, requestData.Url)
 	if err != nil {
-		// logged in service layer
-		return echo.NewHTTPError(http.StatusInternalServerError, "Aliasing failed")
+		log.Error().
+			Err(err).
+			Str("alias", alias).
+			Msg("alias creation failed")
+
+		return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 	}
 
 	// Sending back short URL
-	responseData.Result, _ = url.JoinPath(h.cfg.GetUrlBase(), alias)
+	responseData.Result, _ = url.JoinPath(h.cfg.GetURLBase(), alias)
 	return c.JSON(http.StatusCreated, responseData)
 }
 
@@ -164,5 +187,5 @@ func (h *Handler) Reject(c *echo.Context) error {
 		Str("remote_ip", c.RealIP()).
 		Msg("invalid path in request")
 
-	return echo.NewHTTPError(http.StatusBadRequest, "")
+	return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
 }

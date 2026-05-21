@@ -25,7 +25,7 @@ func TestSetup(t *testing.T) {
 	foundPostJson := false
 
 	for _, r := range routes {
-		if r.Method == "GET" && r.Path == "/:short" {
+		if r.Method == "GET" && r.Path == "/:alias" {
 			foundGet = true
 		}
 		if r.Method == "POST" && r.Path == "/" {

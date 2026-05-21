@@ -28,8 +28,8 @@ func TestFileRepo(t *testing.T) {
 	logger := zerolog.Nop()
 	cfg := &mockRepoConfig{file: dbFile}
 
-	t.Run("NewFileRepo creates file", func(t *testing.T) {
-		repo, err := NewFileRepo(cfg, &logger)
+	t.Run("NewLocalStorage creates file", func(t *testing.T) {
+		repo, err := NewLocalStorage(cfg, &logger)
 		require.NoError(t, err)
 		assert.NotNil(t, repo)
 
@@ -38,7 +38,7 @@ func TestFileRepo(t *testing.T) {
 	})
 
 	t.Run("Save and Get", func(t *testing.T) {
-		repo, err := NewFileRepo(cfg, &logger)
+		repo, err := NewLocalStorage(cfg, &logger)
 		require.NoError(t, err)
 
 		alias := "test1"
@@ -55,7 +55,7 @@ func TestFileRepo(t *testing.T) {
 
 	t.Run("Duplicate Alias", func(t *testing.T) {
 		testFile := filepath.Join(t.TempDir(), "dup.json")
-		repo, err := NewFileRepo(&mockRepoConfig{file: testFile}, &logger)
+		repo, err := NewLocalStorage(&mockRepoConfig{file: testFile}, &logger)
 		require.NoError(t, err)
 
 		alias := "dup"
@@ -76,13 +76,13 @@ func TestFileRepo(t *testing.T) {
 		ctx := context.Background()
 
 		// First instance: Save data
-		repo1, err := NewFileRepo(&mockRepoConfig{file: testFile}, &logger)
+		repo1, err := NewLocalStorage(&mockRepoConfig{file: testFile}, &logger)
 		require.NoError(t, err)
 		err = repo1.Save(ctx, alias, original)
 		require.NoError(t, err)
 
 		// Second instance: Load data from the same file
-		repo2, err := NewFileRepo(&mockRepoConfig{file: testFile}, &logger)
+		repo2, err := NewLocalStorage(&mockRepoConfig{file: testFile}, &logger)
 		require.NoError(t, err)
 
 		res, err := repo2.Get(ctx, alias)
@@ -97,30 +97,26 @@ func TestFileRepo(t *testing.T) {
 
 	t.Run("UUID generation and increment", func(t *testing.T) {
 		testFile := filepath.Join(t.TempDir(), "uuid.json")
-		repo, err := NewFileRepo(&mockRepoConfig{file: testFile}, &logger)
+		repo, err := NewLocalStorage(&mockRepoConfig{file: testFile}, &logger)
 		require.NoError(t, err)
 		ctx := context.Background()
 
 		// Save first entry
 		err = repo.Save(ctx, "alias1", "http://url1.com")
 		require.NoError(t, err)
-		// With the current file.go, this assertion will fail as r.lastUuid is not updated.
-		// It should be 1.
-		assert.Equal(t, 1, repo.lastUuid, "lastUuid should be 1 after first save")
+		assert.Equal(t, 1, repo.lastUUID, "lastUUID should be 1 after first save")
 
 		// Save second entry
 		err = repo.Save(ctx, "alias2", "http://url2.com")
 		require.NoError(t, err)
-		// With the current file.go, this assertion will fail as r.lastUuid is not updated.
-		// It should be 2.
-		assert.Equal(t, 2, repo.lastUuid, "lastUuid should be 2 after second save")
+		assert.Equal(t, 2, repo.lastUUID, "lastUUID should be 2 after second save")
 
 		// Verify persistence of UUIDs by reloading
 		// This is covered by the Persistence test, but good to keep in mind.
 	})
 
 	t.Run("Get Not Found", func(t *testing.T) {
-		repo, err := NewFileRepo(cfg, &logger)
+		repo, err := NewLocalStorage(cfg, &logger)
 		require.NoError(t, err)
 
 		res, err := repo.Get(context.Background(), "missing")
@@ -128,12 +124,12 @@ func TestFileRepo(t *testing.T) {
 		assert.ErrorIs(t, err, domain.ErrNotFound)
 	})
 
-	t.Run("NewFileRepo creates nested directories", func(t *testing.T) {
-		// проверяем, что NewFileRepo создает вложенные директории, если они отсутствуют
+	t.Run("NewLocalStorage creates nested directories", func(t *testing.T) {
+		// проверяем, что NewLocalStorage создает вложенные директории, если они отсутствуют
 		nestedFile := filepath.Join(t.TempDir(), "a", "b", "c", "db.json")
 		nestedCfg := &mockRepoConfig{file: nestedFile}
 
-		repo, err := NewFileRepo(nestedCfg, &logger)
+		repo, err := NewLocalStorage(nestedCfg, &logger)
 		require.NoError(t, err)
 		assert.NotNil(t, repo)
 		assert.FileExists(t, nestedFile)
