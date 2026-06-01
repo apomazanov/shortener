@@ -12,9 +12,13 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type Service interface {
+type BusinessService interface {
 	GetOriginalURL(ctx context.Context, alias string) (original string, err error)
 	CreateURLAlias(ctx context.Context, original string) (alias string, err error)
+}
+
+type HealthService interface {
+	Ping(ctx context.Context) error
 }
 
 type URLConfig interface {
@@ -23,9 +27,10 @@ type URLConfig interface {
 }
 
 type Handler struct {
-	srv Service
-	cfg URLConfig
-	log *zerolog.Logger
+	business BusinessService
+	health   HealthService
+	cfg      URLConfig
+	log      *zerolog.Logger
 }
 
 type jsonShortenRequest struct {
@@ -37,11 +42,12 @@ type jsonShortenResponse struct {
 }
 
 /* -------------------------------------------------------------------------- */
-func New(s Service, c URLConfig, l *zerolog.Logger) *Handler {
+func New(b BusinessService, c URLConfig, l *zerolog.Logger, h HealthService) *Handler {
 	return &Handler{
-		srv: s,
-		cfg: c,
-		log: l,
+		business: b,
+		health:   h,
+		cfg:      c,
+		log:      l,
 	}
 }
 
@@ -65,7 +71,7 @@ func (h *Handler) Get(c *echo.Context) error {
 	}
 
 	// Find original URL
-	original, err := h.srv.GetOriginalURL(ctx, alias)
+	original, err := h.business.GetOriginalURL(ctx, alias)
 
 	if err == nil {
 		// Return original URL with redirection
@@ -85,6 +91,25 @@ func (h *Handler) Get(c *echo.Context) error {
 		Msg("something went wrong")
 
 	return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+}
+
+/* -------------------------------------------------------------------------- */
+func (h *Handler) Ping(c *echo.Context) error {
+
+	log := h.log.With().Str("op", "handler.Ping").Logger()
+
+	ctx := c.Request().Context()
+
+	if err := h.health.Ping(ctx); err != nil {
+
+		log.Error().
+			Err(err).
+			Msg("health check failed")
+
+		return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+	}
+
+	return c.NoContent(http.StatusOK)
 }
 
 /* -------------------------------------------------------------------------- */
@@ -117,7 +142,7 @@ func (h *Handler) CreateText(c *echo.Context) error {
 	}
 
 	// Getting alias
-	alias, err := h.srv.CreateURLAlias(ctx, requestData.Url)
+	alias, err := h.business.CreateURLAlias(ctx, requestData.Url)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -164,7 +189,7 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 	}
 
 	// Getting alias
-	alias, err := h.srv.CreateURLAlias(ctx, requestData.Url)
+	alias, err := h.business.CreateURLAlias(ctx, requestData.Url)
 	if err != nil {
 		log.Error().
 			Err(err).

@@ -22,7 +22,7 @@ type LocalStorage struct {
 	lastUUID int
 }
 
-type RepoConfig interface {
+type LocalStorageConfig interface {
 	GetStorageFile() string
 }
 
@@ -33,7 +33,7 @@ type entry struct {
 }
 
 /* -------------------------------------------------------------------------- */
-func NewLocalStorage(cfg RepoConfig, log *zerolog.Logger) (*LocalStorage, error) {
+func NewLocalStorage(cfg LocalStorageConfig, log *zerolog.Logger) (*LocalStorage, error) {
 
 	storage := &LocalStorage{cache: make(map[string]string)}
 
@@ -152,4 +152,9 @@ func (r *LocalStorage) Get(ctx context.Context, alias string) (original string, 
 	}
 
 	return "", domain.ErrNotFound
+}
+
+/* -------------------------------------------------------------------------- */
+func (r *LocalStorage) Ping(ctx context.Context) error {
+	return nil
 }

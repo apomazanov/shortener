@@ -14,6 +14,7 @@ type Config struct {
 	BaseURL     string `env:"BASE_URL"`
 	AliasSize   int    `env:"ALIAS_SIZE"`
 	StorageFile string `env:"FILE_STORAGE_PATH"`
+	DatabaseDSN string `env:"DATABASE_DSN"`
 }
 
 /* -------------------------------------------------------------------------- */
@@ -23,7 +24,8 @@ func New(args []string) (*Config, error) {
 		ServerAddr:  ":8080",
 		BaseURL:     "http://localhost:8080",
 		AliasSize:   6,
-		StorageFile: "./data/db.json",
+		StorageFile: "",
+		DatabaseDSN: "",
 	}
 
 	// Flags overwrite default values
@@ -33,6 +35,7 @@ func New(args []string) (*Config, error) {
 	fs.StringVar(&cfg.BaseURL, "b", cfg.BaseURL, "Base URL for aliases")
 	fs.StringVar(&cfg.ServerAddr, "a", cfg.ServerAddr, "HTTP-server address:port")
 	fs.StringVar(&cfg.StorageFile, "f", cfg.StorageFile, "Storage file path")
+	fs.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "Database DSN")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, fmt.Errorf("flags parsing failed: %w", err)
@@ -71,4 +74,9 @@ func (c *Config) GetAliasSize() int {
 /* -------------------------------------------------------------------------- */
 func (c *Config) GetStorageFile() string {
 	return c.StorageFile
+}
+
+/* -------------------------------------------------------------------------- */
+func (c *Config) GetDatabaseDSN() string {
+	return c.DatabaseDSN
 }

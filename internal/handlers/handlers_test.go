@@ -16,20 +16,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-/* ------------------------------ Service mock ------------------------------ */
-type serviceMock struct {
+/* ------------------------------ Business mock ----------------------------- */
+type businessMock struct {
 	original string
 	alias    string
 	err      error
 }
 
-func (s *serviceMock) GetOriginalURL(ctx context.Context, alias string) (original string, err error) {
-	return s.original, s.err
+func (b *businessMock) GetOriginalURL(ctx context.Context, alias string) (original string, err error) {
+	return b.original, b.err
 }
 
-func (s *serviceMock) CreateURLAlias(ctx context.Context, original string) (alias string, err error) {
-	return s.alias, s.err
+func (b *businessMock) CreateURLAlias(ctx context.Context, original string) (alias string, err error) {
+	return b.alias, b.err
+}
 
+/* ------------------------------- Health mock ------------------------------ */
+type healthMock struct {
+	err error
+}
+
+func (h *healthMock) Ping(ctx context.Context) error {
+	return h.err
 }
 
 /* ------------------------------- Config mock ------------------------------ */
@@ -57,10 +65,11 @@ func (v *valMock) Validate(i any) error {
 
 /* -------------------------------------------------------------------------- */
 func TestHandler_CreateText(t *testing.T) {
-	s := &serviceMock{}
+	b := &businessMock{}
 	l := zerolog.New(os.Stdout)
 	cfg := &cfgMock{baseURL: "ba.se", aliasSize: 6}
-	h := New(s, cfg, &l)
+	health := &healthMock{}
+	h := New(b, cfg, &l, health)
 	v := valMock{}
 	e := echo.New()
 	e.Validator = &v
@@ -85,8 +94,8 @@ func TestHandler_CreateText(t *testing.T) {
 		resp := httptest.NewRecorder()
 		c := e.NewContext(req, resp)
 		// mocking response from service
-		s.alias = ""
-		s.err = errors.New("some error")
+		b.alias = ""
+		b.err = errors.New("some error")
 		v.err = nil
 
 		err := h.CreateText(c)
@@ -103,8 +112,8 @@ func TestHandler_CreateText(t *testing.T) {
 		resp := httptest.NewRecorder()
 		c := e.NewContext(req, resp)
 		// mocking response from service
-		s.alias = "short1"
-		s.err = nil
+		b.alias = "short1"
+		b.err = nil
 		v.err = nil
 
 		err := h.CreateText(c)
@@ -117,10 +126,11 @@ func TestHandler_CreateText(t *testing.T) {
 
 /* -------------------------------------------------------------------------- */
 func TestHandler_CreateJson(t *testing.T) {
-	s := &serviceMock{}
+	b := &businessMock{}
 	l := zerolog.New(os.Stdout)
 	cfg := &cfgMock{baseURL: "ba.se", aliasSize: 6}
-	h := New(s, cfg, &l)
+	health := &healthMock{}
+	h := New(b, cfg, &l, health)
 	v := valMock{}
 	e := echo.New()
 	e.Validator = &v
@@ -163,8 +173,8 @@ func TestHandler_CreateJson(t *testing.T) {
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		resp := httptest.NewRecorder()
 		c := e.NewContext(req, resp)
-		s.alias = ""
-		s.err = errors.New("some service error")
+		b.alias = ""
+		b.err = errors.New("some service error")
 		v.err = nil
 
 		err := h.CreateJson(c)
@@ -181,8 +191,8 @@ func TestHandler_CreateJson(t *testing.T) {
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		resp := httptest.NewRecorder()
 		c := e.NewContext(req, resp)
-		s.alias = "short1"
-		s.err = nil
+		b.alias = "short1"
+		b.err = nil
 		v.err = nil
 
 		err := h.CreateJson(c)
@@ -195,10 +205,11 @@ func TestHandler_CreateJson(t *testing.T) {
 
 /* -------------------------------------------------------------------------- */
 func TestHandler_Get(t *testing.T) {
-	s := &serviceMock{}
+	b := &businessMock{}
 	l := zerolog.New(os.Stdout)
 	cfg := &cfgMock{baseURL: "ba.se", aliasSize: 6}
-	h := New(s, cfg, &l)
+	health := &healthMock{}
+	h := New(b, cfg, &l, health)
 	e := echo.New()
 
 	t.Run("success", func(t *testing.T) {
@@ -210,8 +221,8 @@ func TestHandler_Get(t *testing.T) {
 			{Name: "alias", Value: "abcdef"},
 		})
 		// mocking response from service
-		s.original = "abracadabra1"
-		s.err = nil
+		b.original = "abracadabra1"
+		b.err = nil
 
 		err := h.Get(c)
 
@@ -229,8 +240,8 @@ func TestHandler_Get(t *testing.T) {
 			{Name: "alias", Value: "abcdef"},
 		})
 		// mocking response from service
-		s.original = ""
-		s.err = domain.ErrNotFound
+		b.original = ""
+		b.err = domain.ErrNotFound
 
 		err := h.Get(c)
 
@@ -250,8 +261,8 @@ func TestHandler_Get(t *testing.T) {
 			{Name: "alias", Value: "abcdef"},
 		})
 		// mocking response from service
-		s.original = ""
-		s.err = errors.New("some error")
+		b.original = ""
+		b.err = errors.New("some error")
 
 		err := h.Get(c)
 
@@ -283,11 +294,49 @@ func TestHandler_Get(t *testing.T) {
 }
 
 /* -------------------------------------------------------------------------- */
-func TestHandler_Reject(t *testing.T) {
-	s := &serviceMock{}
+func TestHandler_Ping(t *testing.T) {
+	b := &businessMock{}
 	l := zerolog.New(os.Stdout)
 	cfg := &cfgMock{baseURL: "ba.se", aliasSize: 6}
-	h := New(s, cfg, &l)
+	health := &healthMock{}
+	h := New(b, cfg, &l, health)
+	e := echo.New()
+
+	t.Run("success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		health.err = nil
+
+		err := h.Ping(c)
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.Code)
+	})
+
+	t.Run("health check failed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		health.err = errors.New("ping error")
+
+		err := h.Ping(c)
+
+		require.Error(t, err)
+		var errHttp *echo.HTTPError
+		if errors.As(err, &errHttp) {
+			assert.Equal(t, http.StatusInternalServerError, errHttp.Code)
+		}
+	})
+}
+
+/* -------------------------------------------------------------------------- */
+func TestHandler_Reject(t *testing.T) {
+	b := &businessMock{}
+	l := zerolog.New(os.Stdout)
+	cfg := &cfgMock{baseURL: "ba.se", aliasSize: 6}
+	health := &healthMock{}
+	h := New(b, cfg, &l, health)
 	e := echo.New()
 
 	t.Run("return BadRequest", func(t *testing.T) {
@@ -298,8 +347,9 @@ func TestHandler_Reject(t *testing.T) {
 		err := h.Reject(c)
 
 		require.Error(t, err)
-		http_err, ok := err.(*echo.HTTPError)
-		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, http_err.Code)
+		var errHttp *echo.HTTPError
+		if errors.As(err, &errHttp) {
+			assert.Equal(t, http.StatusBadRequest, errHttp.Code)
+		}
 	})
 }

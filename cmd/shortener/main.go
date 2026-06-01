@@ -25,6 +25,12 @@ import (
 	my_middleware "github.com/apomazanov/shortener/internal/middleware"
 )
 
+type Repo interface {
+	service.Repo
+	Close() error
+	Ping(ctx context.Context) error
+}
+
 /* -------------------------------------------------------------------------- */
 func run(log *zerolog.Logger) error {
 
@@ -33,7 +39,21 @@ func run(log *zerolog.Logger) error {
 		return fmt.Errorf("run: config error: %w", err)
 	}
 
-	r, err := repository.NewLocalStorage(cfg, log)
+	// Repository
+
+	var r Repo
+
+	if cfg.GetDatabaseDSN() != "" {
+		log.Info().Msg("run: initializing postgres")
+		r, err = repository.NewPostgresStorage(cfg)
+	} else if cfg.GetStorageFile() != "" {
+		log.Info().Msg("run: initializing local storage")
+		r, err = repository.NewLocalStorage(cfg, log)
+	} else {
+		log.Info().Msg("run: initializing memory storage")
+		r = repository.NewMemStorage(log)
+	}
+
 	if err != nil {
 		return fmt.Errorf("run: repo create error: %w", err)
 	}
@@ -46,8 +66,10 @@ func run(log *zerolog.Logger) error {
 		}
 	}()
 
+	// Service and handlers
+
 	s := service.New(r)
-	h := handlers.New(s, cfg, log)
+	h := handlers.New(s, cfg, log, r)
 
 	e := echo.New()
 	e.Validator = validator.New()
