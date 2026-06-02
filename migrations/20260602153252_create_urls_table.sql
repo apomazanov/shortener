@@ -1,0 +1,12 @@
+-- +goose Up
+CREATE TABLE urls (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    alias VARCHAR(6) NOT NULL UNIQUE,
+    original TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_urls_alias ON urls (alias);
+
+-- +goose Down
+DROP TABLE IF EXISTS urls;

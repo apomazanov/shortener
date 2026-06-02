@@ -28,7 +28,6 @@ func TestNew(t *testing.T) {
 			want: &Config{
 				ServerAddr:  ":8080",
 				BaseURL:     "http://localhost:8080",
-				AliasSize:   6,
 				StorageFile: "",
 				DatabaseDSN: "",
 			},
@@ -41,7 +40,6 @@ func TestNew(t *testing.T) {
 			want: &Config{
 				ServerAddr:  ":9090",
 				BaseURL:     "http://example.com",
-				AliasSize:   6,
 				StorageFile: "/tmp/test.json",
 				DatabaseDSN: "postgres://user:pass@localhost:5432/db",
 			},
@@ -59,7 +57,6 @@ func TestNew(t *testing.T) {
 			want: &Config{
 				ServerAddr:  ":7070",
 				BaseURL:     "http://env.com",
-				AliasSize:   6,
 				StorageFile: "/env/path.json",
 				DatabaseDSN: "postgres://env:env@localhost:5432/env_db",
 			},
@@ -79,7 +76,6 @@ func TestNew(t *testing.T) {
 			want: &Config{
 				ServerAddr:  ":8080",
 				BaseURL:     "http://example.com",
-				AliasSize:   6,
 				StorageFile: "",
 				DatabaseDSN: "",
 			},
@@ -107,9 +103,6 @@ func TestNew(t *testing.T) {
 				if cfg.BaseURL != tt.want.BaseURL {
 					t.Errorf("BaseURL = %v, want %v", cfg.BaseURL, tt.want.BaseURL)
 				}
-				if cfg.AliasSize != tt.want.AliasSize {
-					t.Errorf("AliasSize = %v, want %v", cfg.AliasSize, tt.want.AliasSize)
-				}
 				if cfg.StorageFile != tt.want.StorageFile {
 					t.Errorf("StorageFile = %v, want %v", cfg.StorageFile, tt.want.StorageFile)
 				}
@@ -125,7 +118,6 @@ func TestConfigGetters(t *testing.T) {
 	cfg := &Config{
 		ServerAddr:  ":1234",
 		BaseURL:     "http://test.com",
-		AliasSize:   10,
 		StorageFile: "/test/file",
 		DatabaseDSN: "postgres://localhost:5432/test",
 	}
@@ -135,9 +127,6 @@ func TestConfigGetters(t *testing.T) {
 	}
 	if cfg.GetURLBase() != "http://test.com" {
 		t.Errorf("GetURLBase() = %v, want %v", cfg.GetURLBase(), "http://test.com")
-	}
-	if cfg.GetAliasSize() != 10 {
-		t.Errorf("GetAliasSize() = %v, want %v", cfg.GetAliasSize(), 10)
 	}
 	if cfg.GetStorageFile() != "/test/file" {
 		t.Errorf("GetStorageFile() = %v, want %v", cfg.GetStorageFile(), "/test/file")

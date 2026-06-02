@@ -12,6 +12,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const aliasSize = 6
+
 type BusinessService interface {
 	GetOriginalURL(ctx context.Context, alias string) (original string, err error)
 	CreateURLAlias(ctx context.Context, original string) (alias string, err error)
@@ -23,7 +25,6 @@ type HealthService interface {
 
 type URLConfig interface {
 	GetURLBase() string
-	GetAliasSize() int
 }
 
 type Handler struct {
@@ -62,7 +63,7 @@ func (h *Handler) Get(c *echo.Context) error {
 	// Getting alias from request URL
 	alias := c.Param("alias")
 
-	if len(alias) != h.cfg.GetAliasSize() {
+	if len(alias) != aliasSize {
 		log.Info().
 			Str("alias", alias).
 			Msg("invalid alias")

@@ -2,19 +2,29 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/apomazanov/shortener/internal/domain"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+type pgxPooler interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Ping(ctx context.Context) error
+	Close()
+}
 
 type PostgresConfig interface {
 	GetDatabaseDSN() string
 }
 
 type PostgresStorage struct {
-	pool *pgxpool.Pool
+	pool pgxPooler
 }
 
 /* -------------------------------------------------------------------------- */
@@ -47,6 +57,25 @@ func (r *PostgresStorage) Save(ctx context.Context, alias string, original strin
 		return fmt.Errorf("repo: save aborted: %w", err)
 	}
 
+	queryCtx := context.WithoutCancel(ctx)
+	queryCtx, cancel := context.WithTimeout(queryCtx, 3*time.Second)
+	defer cancel()
+
+	query := `
+		INSERT INTO urls (alias, original)
+		VALUES ($1, $2)
+		ON CONFLICT (alias) DO NOTHING;
+	`
+
+	cmdTag, err := r.pool.Exec(queryCtx, query, alias, original)
+	if err != nil {
+		return fmt.Errorf("repo: database error: %w", err)
+	}
+
+	if cmdTag.RowsAffected() == 0 {
+		return domain.ErrDuplicate
+	}
+
 	return nil
 }
 
@@ -56,7 +85,24 @@ func (r *PostgresStorage) Get(ctx context.Context, alias string) (original strin
 		return "", fmt.Errorf("repo: get aborted: %w", err)
 	}
 
-	return "", domain.ErrNotFound
+	queryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	query := `
+		SELECT original 
+		FROM urls 
+		WHERE alias = $1;
+	`
+
+	err = r.pool.QueryRow(queryCtx, query, alias).Scan(&original)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", domain.ErrNotFound
+		}
+		return "", fmt.Errorf("repo: database error: %w", err)
+	}
+
+	return original, nil
 }
 
 /* -------------------------------------------------------------------------- */

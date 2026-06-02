@@ -12,7 +12,6 @@ import (
 type Config struct {
 	ServerAddr  string `env:"SERVER_ADDRESS"`
 	BaseURL     string `env:"BASE_URL"`
-	AliasSize   int    `env:"ALIAS_SIZE"`
 	StorageFile string `env:"FILE_STORAGE_PATH"`
 	DatabaseDSN string `env:"DATABASE_DSN"`
 }
@@ -23,7 +22,6 @@ func New(args []string) (*Config, error) {
 	cfg := Config{
 		ServerAddr:  ":8080",
 		BaseURL:     "http://localhost:8080",
-		AliasSize:   6,
 		StorageFile: "",
 		DatabaseDSN: "",
 	}
@@ -64,11 +62,6 @@ func (c *Config) GetServerAddress() string {
 /* -------------------------------------------------------------------------- */
 func (c *Config) GetURLBase() string {
 	return c.BaseURL
-}
-
-/* -------------------------------------------------------------------------- */
-func (c *Config) GetAliasSize() int {
-	return c.AliasSize
 }
 
 /* -------------------------------------------------------------------------- */
