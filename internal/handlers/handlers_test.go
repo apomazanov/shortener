@@ -83,9 +83,9 @@ func TestHandler_CreateText(t *testing.T) {
 		err := h.CreateText(c)
 
 		require.Error(t, err)
-		var errHttp *echo.HTTPError
-		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusBadRequest, errHttp.Code)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusBadRequest, errHTTP.Code)
 		}
 	})
 
@@ -101,9 +101,9 @@ func TestHandler_CreateText(t *testing.T) {
 		err := h.CreateText(c)
 
 		require.Error(t, err)
-		var errHttp *echo.HTTPError
-		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusInternalServerError, errHttp.Code)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusInternalServerError, errHTTP.Code)
 		}
 	})
 
@@ -145,10 +145,10 @@ func TestHandler_CreateJson(t *testing.T) {
 		err := h.CreateJson(c)
 
 		require.Error(t, err)
-		var errHttp *echo.HTTPError
-		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusBadRequest, errHttp.Code)
-			assert.NotEmpty(t, errHttp.Message)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusBadRequest, errHTTP.Code)
+			assert.NotEmpty(t, errHTTP.Message)
 		}
 	})
 
@@ -162,9 +162,9 @@ func TestHandler_CreateJson(t *testing.T) {
 		err := h.CreateJson(c)
 
 		require.Error(t, err)
-		var errHttp *echo.HTTPError
-		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusBadRequest, errHttp.Code)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusBadRequest, errHTTP.Code)
 		}
 	})
 
@@ -180,9 +180,9 @@ func TestHandler_CreateJson(t *testing.T) {
 		err := h.CreateJson(c)
 
 		require.Error(t, err)
-		var errHttp *echo.HTTPError
-		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusInternalServerError, errHttp.Code)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusInternalServerError, errHTTP.Code)
 		}
 	})
 
@@ -246,9 +246,9 @@ func TestHandler_Get(t *testing.T) {
 		err := h.Get(c)
 
 		require.Error(t, err)
-		var errHttp *echo.HTTPError
-		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusNotFound, errHttp.Code)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusNotFound, errHTTP.Code)
 		}
 	})
 
@@ -267,9 +267,9 @@ func TestHandler_Get(t *testing.T) {
 		err := h.Get(c)
 
 		require.Error(t, err)
-		var errHttp *echo.HTTPError
-		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusInternalServerError, errHttp.Code)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusInternalServerError, errHTTP.Code)
 		}
 	})
 
@@ -285,9 +285,9 @@ func TestHandler_Get(t *testing.T) {
 		err := h.Get(c)
 
 		require.Error(t, err)
-		var errHttp *echo.HTTPError
-		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusBadRequest, errHttp.Code)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusBadRequest, errHTTP.Code)
 		}
 	})
 
@@ -323,9 +323,9 @@ func TestHandler_Ping(t *testing.T) {
 		err := h.Ping(c)
 
 		require.Error(t, err)
-		var errHttp *echo.HTTPError
-		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusInternalServerError, errHttp.Code)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusInternalServerError, errHTTP.Code)
 		}
 	})
 }
@@ -347,9 +347,9 @@ func TestHandler_Reject(t *testing.T) {
 		err := h.Reject(c)
 
 		require.Error(t, err)
-		var errHttp *echo.HTTPError
-		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusBadRequest, errHttp.Code)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusBadRequest, errHTTP.Code)
 		}
 	})
 }

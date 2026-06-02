@@ -122,8 +122,8 @@ func (r *LocalStorage) Save(ctx context.Context, alias string, original string) 
 	// Appending
 
 	// Preparing data
-	newLastUuid := r.lastUUID + 1
-	entry := entry{UUID: newLastUuid, Alias: alias, Original: original}
+	newLastUUID := r.lastUUID + 1
+	entry := entry{UUID: newLastUUID, Alias: alias, Original: original}
 
 	// Writing
 	if err := r.encoder.Encode(entry); err != nil {
@@ -132,7 +132,7 @@ func (r *LocalStorage) Save(ctx context.Context, alias string, original string) 
 
 	// Updating cache, if data write was successful
 	r.cache[alias] = original
-	r.lastUUID = newLastUuid
+	r.lastUUID = newLastUUID
 
 	return nil
 }

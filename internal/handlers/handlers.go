@@ -35,7 +35,7 @@ type Handler struct {
 }
 
 type jsonShortenRequest struct {
-	Url string `json:"url" validate:"required,url"`
+	URL string `json:"url" validate:"required,url"`
 }
 
 type jsonShortenResponse struct {
@@ -132,7 +132,7 @@ func (h *Handler) CreateText(c *echo.Context) error {
 	}
 
 	// Casting body to string, validating
-	requestData := jsonShortenRequest{Url: string(body)}
+	requestData := jsonShortenRequest{URL: string(body)}
 	if err := c.Validate(&requestData); err != nil {
 		log.Info().
 			Err(err).
@@ -143,7 +143,7 @@ func (h *Handler) CreateText(c *echo.Context) error {
 	}
 
 	// Getting alias
-	alias, err := h.business.CreateURLAlias(ctx, requestData.Url)
+	alias, err := h.business.CreateURLAlias(ctx, requestData.URL)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -190,7 +190,7 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 	}
 
 	// Getting alias
-	alias, err := h.business.CreateURLAlias(ctx, requestData.Url)
+	alias, err := h.business.CreateURLAlias(ctx, requestData.URL)
 	if err != nil {
 		log.Error().
 			Err(err).

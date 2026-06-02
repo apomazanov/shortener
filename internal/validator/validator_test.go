@@ -16,23 +16,23 @@ func TestValidator_Validate(t *testing.T) {
 	v := New()
 
 	type testStruct struct {
-		Url string `validate:"required,url"`
+		URL string `validate:"required,url"`
 	}
 
 	t.Run("valid url", func(t *testing.T) {
-		data := testStruct{Url: "https://google.com"}
+		data := testStruct{URL: "https://google.com"}
 		err := v.Validate(data)
 		assert.NoError(t, err)
 	})
 
 	t.Run("invalid url", func(t *testing.T) {
-		data := testStruct{Url: "invalid-url"}
+		data := testStruct{URL: "invalid-url"}
 		err := v.Validate(data)
 		assert.Error(t, err)
 	})
 
 	t.Run("empty url", func(t *testing.T) {
-		data := testStruct{Url: ""}
+		data := testStruct{URL: ""}
 		err := v.Validate(data)
 		assert.Error(t, err)
 	})
