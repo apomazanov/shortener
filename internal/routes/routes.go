@@ -12,5 +12,6 @@ func Setup(e *echo.Echo, userHandler *handlers.Handler) {
 	e.GET("/ping", userHandler.Ping)
 	e.POST("/", userHandler.CreateText)
 	e.POST("/api/shorten", userHandler.CreateJson)
+	e.POST("/api/shorten/batch", userHandler.CreateJsonBatch)
 	e.RouteNotFound("/*", userHandler.Reject)
 }

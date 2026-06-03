@@ -42,6 +42,16 @@ type jsonShortenResponse struct {
 	Result string `json:"result"`
 }
 
+type jsonBatchRequestItem struct {
+	ID       string `json:"correlation_id" validate:"required"`
+	Original string `json:"original_url" validate:"required,url"`
+}
+
+type jsonBatchResponseItem struct {
+	ID     string `json:"correlation_id"`
+	Result string `json:"short_url"`
+}
+
 /* -------------------------------------------------------------------------- */
 func New(b BusinessService, c URLConfig, l *zerolog.Logger, h HealthService) *Handler {
 	return &Handler{
@@ -202,6 +212,60 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 
 	// Sending back short URL
 	responseData.Result, _ = url.JoinPath(h.cfg.GetURLBase(), alias)
+	return c.JSON(http.StatusCreated, responseData)
+}
+
+/* -------------------------------------------------------------------------- */
+func (h *Handler) CreateJsonBatch(c *echo.Context) error {
+	var requestData []jsonBatchRequestItem
+	var responseData []jsonBatchResponseItem
+
+	log := h.log.With().Str("op", "handler.CreateJsonBatch").Logger()
+
+	// Raw context for deeper layers, evading 'echo' dependency
+	ctx := c.Request().Context()
+
+	// Reading body
+	if err := c.Bind(&requestData); err != nil {
+		log.Info().
+			Err(err).
+			Msg("failed to read request body")
+
+		return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
+	}
+
+	// Processing each item
+	for _, item := range requestData {
+		// Validating
+		if err := c.Validate(&item); err != nil {
+			log.Info().
+				Err(err).
+				Any("request_item", item).
+				Msg("invalid request data")
+
+			return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
+		}
+
+		// Getting alias
+		alias, err := h.business.CreateURLAlias(ctx, item.Original)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("correlation_id", item.ID).
+				Str("original_url", item.Original).
+				Msg("alias creation failed")
+
+			return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		}
+
+		// Add to response
+		responseDataResult, _ := url.JoinPath(h.cfg.GetURLBase(), alias)
+		responseData = append(responseData, jsonBatchResponseItem{
+			ID:     item.ID,
+			Result: responseDataResult,
+		})
+	}
+
 	return c.JSON(http.StatusCreated, responseData)
 }
 
