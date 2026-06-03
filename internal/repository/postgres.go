@@ -7,9 +7,13 @@ import (
 	"time"
 
 	"github.com/apomazanov/shortener/internal/domain"
+	"github.com/apomazanov/shortener/migrations"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/pressly/goose/v3"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type pgxPooler interface {
@@ -28,12 +32,47 @@ type PostgresStorage struct {
 }
 
 /* -------------------------------------------------------------------------- */
+func runMigrations(ctx context.Context, dsn string) error {
+
+	goose.SetBaseFS(migrations.EmbedFS)
+
+	err := goose.SetDialect("postgres")
+	if err != nil {
+		return fmt.Errorf("migration: cannot set dialect: %w", err)
+	}
+
+	db, err := goose.OpenDBWithDriver("pgx", dsn)
+	if err != nil {
+		return fmt.Errorf("migration: cannot open DB: %w", err)
+	}
+	defer db.Close()
+
+	err = goose.UpContext(ctx, db, ".")
+	if err != nil {
+		return fmt.Errorf("migration: cannot apply migrations: %w", err)
+	}
+
+	return nil
+}
+
+/* -------------------------------------------------------------------------- */
 func NewPostgresStorage(cfg PostgresConfig) (*PostgresStorage, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	config, err := pgxpool.ParseConfig(cfg.GetDatabaseDSN())
+	dsn := cfg.GetDatabaseDSN()
+
+	// DB migrations
+
+	err := runMigrations(ctx, dsn)
+	if err != nil {
+		return nil, fmt.Errorf("repo: db migration failed: %w", err)
+	}
+
+	// Connections pool for business
+
+	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("repo: cannot parse DSN: %w", err)
 	}
