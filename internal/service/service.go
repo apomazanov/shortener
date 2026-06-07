@@ -65,11 +65,11 @@ func (s *Service) CreateURLAlias(ctx context.Context, original string) (alias st
 
 		alias, err = s.repo.Save(ctx, newAlias, original)
 
-		if err == nil {
+		if err == nil || errors.Is(err, domain.ErrOriginalURLDuplicate) {
 			return alias, err
 		}
 
-		if errors.Is(err, domain.ErrDuplicate) {
+		if errors.Is(err, domain.ErrAliasDuplicate) {
 			// error is alias collision, keep trying
 			continue
 		}

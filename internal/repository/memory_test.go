@@ -34,7 +34,7 @@ func TestMemStorage(t *testing.T) {
 		assert.NoError(t, err)
 
 		_, err = repo.Save(ctx, alias, "http://another.com")
-		assert.ErrorIs(t, err, domain.ErrDuplicate)
+		assert.ErrorIs(t, err, domain.ErrAliasDuplicate)
 	})
 
 	t.Run("Existing Original URL", func(t *testing.T) {
@@ -48,7 +48,7 @@ func TestMemStorage(t *testing.T) {
 
 		alias2 := "alias2"
 		res2, err := repo.Save(ctx, alias2, original)
-		assert.NoError(t, err)
+		assert.ErrorIs(t, err, domain.ErrOriginalURLDuplicate)
 		// Должен вернуть существующий alias1
 		assert.Equal(t, alias1, res2)
 	})

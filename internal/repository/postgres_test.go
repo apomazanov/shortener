@@ -42,7 +42,7 @@ func TestPostgresStorage_Save(t *testing.T) {
 			WillReturnRows(pgxmock.NewRows([]string{"alias"}).AddRow(existingAlias))
 
 		res, err := repo.Save(context.Background(), alias, original)
-		assert.NoError(t, err)
+		assert.ErrorIs(t, err, domain.ErrOriginalURLDuplicate)
 		assert.Equal(t, existingAlias, res)
 	})
 
@@ -56,7 +56,7 @@ func TestPostgresStorage_Save(t *testing.T) {
 			WillReturnResult(pgxmock.NewResult("INSERT", 0))
 
 		_, err := repo.Save(context.Background(), alias, original)
-		assert.ErrorIs(t, err, domain.ErrDuplicate)
+		assert.ErrorIs(t, err, domain.ErrAliasDuplicate)
 	})
 
 	t.Run("database error", func(t *testing.T) {

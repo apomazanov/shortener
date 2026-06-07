@@ -67,7 +67,7 @@ func TestFileRepo(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = repo.Save(ctx, alias, "http://another.com")
-		assert.ErrorIs(t, err, domain.ErrDuplicate)
+		assert.ErrorIs(t, err, domain.ErrAliasDuplicate)
 	})
 
 	t.Run("Existing Original URL", func(t *testing.T) {
@@ -87,7 +87,7 @@ func TestFileRepo(t *testing.T) {
 		// Second save with same URL but different suggested alias
 		alias2 := "alias2"
 		res2, err := repo.Save(ctx, alias2, original)
-		require.NoError(t, err)
+		assert.ErrorIs(t, err, domain.ErrOriginalURLDuplicate)
 		// Should return the first alias instead of error or new entry
 		assert.Equal(t, alias1, res2)
 	})

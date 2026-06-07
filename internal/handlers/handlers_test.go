@@ -122,6 +122,22 @@ func TestHandler_CreateText(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, resp.Code)
 		assert.Equal(t, cfg.baseURL+"/short1", resp.Body.String())
 	})
+
+	t.Run("conflict", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("google.com"))
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		// mocking response from service
+		b.alias = "existing_short"
+		b.err = domain.ErrOriginalURLDuplicate
+		v.err = nil
+
+		err := h.CreateText(c)
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusConflict, resp.Code)
+		assert.Equal(t, cfg.baseURL+"/existing_short", resp.Body.String())
+	})
 }
 
 /* -------------------------------------------------------------------------- */
@@ -200,6 +216,22 @@ func TestHandler_CreateJson(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusCreated, resp.Code)
 		assert.JSONEq(t, `{"result":"ba.se/short1"}`, resp.Body.String())
+	})
+
+	t.Run("conflict", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"url": "https://google.com"}`))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		b.alias = "existing_short"
+		b.err = domain.ErrOriginalURLDuplicate
+		v.err = nil
+
+		err := h.CreateJson(c)
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusConflict, resp.Code)
+		assert.JSONEq(t, `{"result":"ba.se/existing_short"}`, resp.Body.String())
 	})
 }
 
@@ -291,6 +323,87 @@ func TestHandler_Get(t *testing.T) {
 		}
 	})
 
+}
+
+/* -------------------------------------------------------------------------- */
+func TestHandler_CreateJsonBatch(t *testing.T) {
+	b := &businessMock{}
+	l := zerolog.New(os.Stdout)
+	cfg := &cfgMock{baseURL: "ba.se", aliasSize: 6}
+	health := &healthMock{}
+	h := New(b, cfg, &l, health)
+	v := valMock{}
+	e := echo.New()
+	e.Validator = &v
+
+	t.Run("malformed json body", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("invalid json"))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+
+		err := h.CreateJsonBatch(c)
+
+		require.Error(t, err)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusBadRequest, errHTTP.Code)
+		}
+	})
+
+	t.Run("validation error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`[{"correlation_id": ""}]`))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		v.err = errors.New("validation error")
+
+		err := h.CreateJsonBatch(c)
+
+		require.Error(t, err)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusBadRequest, errHTTP.Code)
+		}
+	})
+
+	t.Run("service error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`[{"correlation_id": "1", "original_url": "https://google.com"}]`))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		b.alias = ""
+		b.err = errors.New("some service error")
+		v.err = nil
+
+		err := h.CreateJsonBatch(c)
+
+		require.Error(t, err)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusInternalServerError, errHTTP.Code)
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		reqBody := `[
+			{"correlation_id": "1", "original_url": "https://google.com"},
+			{"correlation_id": "2", "original_url": "https://yandex.ru"}
+		]`
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(reqBody))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		b.alias = "short1"
+		b.err = nil
+		v.err = nil
+
+		err := h.CreateJsonBatch(c)
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusCreated, resp.Code)
+		assert.JSONEq(t, `[{"correlation_id":"1","short_url":"ba.se/short1"},{"correlation_id":"2","short_url":"ba.se/short1"}]`, resp.Body.String())
+	})
 }
 
 /* -------------------------------------------------------------------------- */

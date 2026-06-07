@@ -118,14 +118,14 @@ func (r *LocalStorage) Save(ctx context.Context, alias string, original string) 
 
 	for k, v := range r.cache {
 		if v == original {
-			return k, nil
+			return k, domain.ErrOriginalURLDuplicate
 		}
 	}
 
 	// Searching for alias duplicates
 
 	if _, exists := r.cache[alias]; exists {
-		return "", domain.ErrDuplicate
+		return "", domain.ErrAliasDuplicate
 	}
 
 	// Appending

@@ -93,7 +93,7 @@ func TestCreateURLAlias(t *testing.T) {
 	})
 
 	t.Run("retry limit exceeded on duplicates", func(t *testing.T) {
-		repo.err = domain.ErrDuplicate
+		repo.err = domain.ErrAliasDuplicate
 		repo.saveCalls = 0
 
 		alias, err := s.CreateURLAlias(ctx, "http://google.com")

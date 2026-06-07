@@ -110,7 +110,7 @@ func (r *PostgresStorage) Save(ctx context.Context, alias string, original strin
 	query := `SELECT alias FROM urls WHERE original = $1`
 	err = r.pool.QueryRow(queryCtx, query, original).Scan(&existingAlias)
 	if err == nil {
-		return existingAlias, nil
+		return existingAlias, domain.ErrOriginalURLDuplicate
 	}
 
 	if !errors.Is(err, pgx.ErrNoRows) {
@@ -131,7 +131,7 @@ func (r *PostgresStorage) Save(ctx context.Context, alias string, original strin
 	}
 
 	if cmdTag.RowsAffected() == 0 {
-		return "", domain.ErrDuplicate
+		return "", domain.ErrAliasDuplicate
 	}
 
 	return alias, nil

@@ -152,22 +152,29 @@ func (h *Handler) CreateText(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
 	}
 
+	responseStatus := http.StatusCreated
+
 	// Getting alias
 	alias, err := h.business.CreateURLAlias(ctx, requestData.URL)
 	if err != nil {
-		log.Error().
-			Err(err).
-			Str("alias", alias).
-			Msg("alias creation failed")
 
-		return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		if errors.Is(err, domain.ErrOriginalURLDuplicate) {
+			responseStatus = http.StatusConflict
+		} else {
+			log.Error().
+				Err(err).
+				Str("alias", alias).
+				Msg("alias creation failed")
+
+			return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		}
 	}
 
 	// Sending back short URL
 
 	// base URL already validated during config
 	shortUrl := h.cfg.GetURLBase() + "/" + alias
-	return c.String(http.StatusCreated, shortUrl)
+	return c.String(responseStatus, shortUrl)
 }
 
 /* -------------------------------------------------------------------------- */
@@ -199,20 +206,27 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
 	}
 
+	responseStatus := http.StatusCreated
+
 	// Getting alias
 	alias, err := h.business.CreateURLAlias(ctx, requestData.URL)
 	if err != nil {
-		log.Error().
-			Err(err).
-			Str("alias", alias).
-			Msg("alias creation failed")
 
-		return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		if errors.Is(err, domain.ErrOriginalURLDuplicate) {
+			responseStatus = http.StatusConflict
+		} else {
+			log.Error().
+				Err(err).
+				Str("alias", alias).
+				Msg("alias creation failed")
+
+			return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		}
 	}
 
 	// Sending back short URL
 	responseData.Result, _ = url.JoinPath(h.cfg.GetURLBase(), alias)
-	return c.JSON(http.StatusCreated, responseData)
+	return c.JSON(responseStatus, responseData)
 }
 
 /* -------------------------------------------------------------------------- */
@@ -248,7 +262,7 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 
 		// Getting alias
 		alias, err := h.business.CreateURLAlias(ctx, item.Original)
-		if err != nil {
+		if err != nil && !errors.Is(err, domain.ErrOriginalURLDuplicate) {
 			log.Error().
 				Err(err).
 				Str("correlation_id", item.ID).
