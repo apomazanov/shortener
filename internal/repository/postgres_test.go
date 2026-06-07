@@ -21,29 +21,49 @@ func TestPostgresStorage_Save(t *testing.T) {
 	alias := "test_alias"
 	original := "http://example.com"
 
-	t.Run("success", func(t *testing.T) {
+	t.Run("success insert", func(t *testing.T) {
+		mock.ExpectQuery("SELECT alias FROM urls").
+			WithArgs(original).
+			WillReturnError(pgx.ErrNoRows)
+
 		mock.ExpectExec("INSERT INTO urls").
 			WithArgs(alias, original).
 			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
-		err := repo.Save(context.Background(), alias, original)
+		res, err := repo.Save(context.Background(), alias, original)
 		assert.NoError(t, err)
+		assert.Equal(t, alias, res)
+	})
+
+	t.Run("success existing", func(t *testing.T) {
+		existingAlias := "old_alias"
+		mock.ExpectQuery("SELECT alias FROM urls").
+			WithArgs(original).
+			WillReturnRows(pgxmock.NewRows([]string{"alias"}).AddRow(existingAlias))
+
+		res, err := repo.Save(context.Background(), alias, original)
+		assert.NoError(t, err)
+		assert.Equal(t, existingAlias, res)
 	})
 
 	t.Run("duplicate alias", func(t *testing.T) {
+		mock.ExpectQuery("SELECT alias FROM urls").
+			WithArgs(original).
+			WillReturnError(pgx.ErrNoRows)
+
 		mock.ExpectExec("INSERT INTO urls").
 			WithArgs(alias, original).
 			WillReturnResult(pgxmock.NewResult("INSERT", 0))
 
-		err := repo.Save(context.Background(), alias, original)
+		_, err := repo.Save(context.Background(), alias, original)
 		assert.ErrorIs(t, err, domain.ErrDuplicate)
 	})
 
 	t.Run("database error", func(t *testing.T) {
-		mock.ExpectExec("INSERT INTO urls").
-			WillReturnError(errors.New("connection failed"))
+		mock.ExpectQuery("SELECT alias FROM urls").
+			WillReturnError(errors.New("db fail"))
 
-		err := repo.Save(context.Background(), alias, original)
+		_, err := repo.Save(context.Background(), alias, original)
 		assert.ErrorContains(t, err, "repo: database error")
 	})
 
@@ -51,7 +71,7 @@ func TestPostgresStorage_Save(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Отменяем сразу
 
-		err := repo.Save(ctx, alias, original)
+		_, err := repo.Save(ctx, alias, original)
 		assert.ErrorContains(t, err, "repo: save aborted")
 	})
 }

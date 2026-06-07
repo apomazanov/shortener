@@ -20,25 +20,33 @@ func NewMemStorage(log *zerolog.Logger) *MemStorage {
 }
 
 /* -------------------------------------------------------------------------- */
-func (r *MemStorage) Save(ctx context.Context, alias string, original string) error {
+func (r *MemStorage) Save(ctx context.Context, alias string, original string) (usedAlias string, err error) {
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("repo: save aborted: %w", err)
+		return "", fmt.Errorf("repo: save aborted: %w", err)
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// Searching for alias duplicates first
+	// Searching for original URL duplicates first
+
+	for k, v := range r.cache {
+		if v == original {
+			return k, nil
+		}
+	}
+
+	// Searching for alias duplicates
 
 	if _, exists := r.cache[alias]; exists {
-		return domain.ErrDuplicate
+		return "", domain.ErrDuplicate
 	}
 
 	// Appending
 
 	r.cache[alias] = original
 
-	return nil
+	return alias, nil
 }
 
 /* -------------------------------------------------------------------------- */

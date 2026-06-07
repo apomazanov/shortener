@@ -10,20 +10,22 @@ import (
 )
 
 type Config struct {
-	ServerAddr  string `env:"SERVER_ADDRESS"`
-	BaseURL     string `env:"BASE_URL"`
-	StorageFile string `env:"FILE_STORAGE_PATH"`
-	DatabaseDSN string `env:"DATABASE_DSN"`
+	ServerAddr    string `env:"SERVER_ADDRESS"`
+	BaseURL       string `env:"BASE_URL"`
+	StorageFile   string `env:"FILE_STORAGE_PATH"`
+	DatabaseDSN   string `env:"DATABASE_DSN"`
+	NoDBMigration bool   `env:"NO_DB_MIGRATION"`
 }
 
 /* -------------------------------------------------------------------------- */
 func New(args []string) (*Config, error) {
 
 	cfg := Config{
-		ServerAddr:  ":8080",
-		BaseURL:     "http://localhost:8080",
-		StorageFile: "",
-		DatabaseDSN: "",
+		ServerAddr:    ":8080",
+		BaseURL:       "http://localhost:8080",
+		StorageFile:   "",
+		DatabaseDSN:   "",
+		NoDBMigration: false,
 	}
 
 	// Flags overwrite default values
@@ -72,4 +74,9 @@ func (c *Config) GetStorageFile() string {
 /* -------------------------------------------------------------------------- */
 func (c *Config) GetDatabaseDSN() string {
 	return c.DatabaseDSN
+}
+
+/* -------------------------------------------------------------------------- */
+func (c *Config) GetNoDBMigration() bool {
+	return c.NoDBMigration
 }

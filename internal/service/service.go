@@ -11,7 +11,7 @@ import (
 )
 
 type Repo interface {
-	Save(ctx context.Context, alias string, original string) error
+	Save(ctx context.Context, alias string, original string) (usedAlias string, err error)
 	Get(ctx context.Context, alias string) (original string, err error)
 }
 
@@ -61,9 +61,9 @@ func (s *Service) CreateURLAlias(ctx context.Context, original string) (alias st
 	const maxRetries = 5
 
 	for range maxRetries {
-		alias = s.newAlias()
+		newAlias := s.newAlias()
 
-		err = s.repo.Save(ctx, alias, original)
+		alias, err = s.repo.Save(ctx, newAlias, original)
 
 		if err == nil {
 			return alias, err

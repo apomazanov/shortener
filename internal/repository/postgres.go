@@ -25,6 +25,7 @@ type pgxPooler interface {
 
 type PostgresConfig interface {
 	GetDatabaseDSN() string
+	GetNoDBMigration() bool
 }
 
 type PostgresStorage struct {
@@ -62,12 +63,15 @@ func NewPostgresStorage(cfg PostgresConfig) (*PostgresStorage, error) {
 	defer cancel()
 
 	dsn := cfg.GetDatabaseDSN()
+	doNotMigrate := cfg.GetNoDBMigration()
 
 	// DB migrations
 
-	err := runMigrations(ctx, dsn)
-	if err != nil {
-		return nil, fmt.Errorf("repo: db migration failed: %w", err)
+	if !doNotMigrate {
+		err := runMigrations(ctx, dsn)
+		if err != nil {
+			return nil, fmt.Errorf("repo: db migration failed: %w", err)
+		}
 	}
 
 	// Connections pool for business
@@ -91,16 +95,31 @@ func NewPostgresStorage(cfg PostgresConfig) (*PostgresStorage, error) {
 }
 
 /* -------------------------------------------------------------------------- */
-func (r *PostgresStorage) Save(ctx context.Context, alias string, original string) error {
+func (r *PostgresStorage) Save(ctx context.Context, alias string, original string) (usedAlias string, err error) {
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("repo: save aborted: %w", err)
+		return "", fmt.Errorf("repo: save aborted: %w", err)
 	}
 
 	queryCtx := context.WithoutCancel(ctx)
 	queryCtx, cancel := context.WithTimeout(queryCtx, 3*time.Second)
 	defer cancel()
 
-	query := `
+	// check if original URL already saved
+
+	var existingAlias string
+	query := `SELECT alias FROM urls WHERE original = $1`
+	err = r.pool.QueryRow(queryCtx, query, original).Scan(&existingAlias)
+	if err == nil {
+		return existingAlias, nil
+	}
+
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return "", fmt.Errorf("repo: database error: %w", err)
+	}
+
+	// creating new db record
+
+	query = `
 		INSERT INTO urls (alias, original)
 		VALUES ($1, $2)
 		ON CONFLICT (alias) DO NOTHING;
@@ -108,14 +127,14 @@ func (r *PostgresStorage) Save(ctx context.Context, alias string, original strin
 
 	cmdTag, err := r.pool.Exec(queryCtx, query, alias, original)
 	if err != nil {
-		return fmt.Errorf("repo: database error: %w", err)
+		return "", fmt.Errorf("repo: database error: %w", err)
 	}
 
 	if cmdTag.RowsAffected() == 0 {
-		return domain.ErrDuplicate
+		return "", domain.ErrDuplicate
 	}
 
-	return nil
+	return alias, nil
 }
 
 /* -------------------------------------------------------------------------- */

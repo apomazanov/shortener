@@ -70,6 +70,7 @@ func NewLocalStorage(cfg LocalStorageConfig, log *zerolog.Logger) (*LocalStorage
 				Msg("parsing error")
 
 			// bad record is just passed by, not interrupting
+			continue
 		}
 
 		storage.cache[e.Alias] = e.Original
@@ -105,18 +106,26 @@ func (r *LocalStorage) Close() error {
 }
 
 /* -------------------------------------------------------------------------- */
-func (r *LocalStorage) Save(ctx context.Context, alias string, original string) error {
+func (r *LocalStorage) Save(ctx context.Context, alias string, original string) (usedAlias string, err error) {
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("repo: save aborted: %w", err)
+		return "", fmt.Errorf("repo: save aborted: %w", err)
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// Searching for alias duplicates first
+	// Searching for original URL duplicates first
+
+	for k, v := range r.cache {
+		if v == original {
+			return k, nil
+		}
+	}
+
+	// Searching for alias duplicates
 
 	if _, exists := r.cache[alias]; exists {
-		return domain.ErrDuplicate
+		return "", domain.ErrDuplicate
 	}
 
 	// Appending
@@ -127,14 +136,14 @@ func (r *LocalStorage) Save(ctx context.Context, alias string, original string) 
 
 	// Writing
 	if err := r.encoder.Encode(entry); err != nil {
-		return fmt.Errorf("repo: JSON encode error: %w", err)
+		return "", fmt.Errorf("repo: JSON encode error: %w", err)
 	}
 
 	// Updating cache, if data write was successful
 	r.cache[alias] = original
 	r.lastUUID = newLastUUID
 
-	return nil
+	return alias, nil
 }
 
 /* -------------------------------------------------------------------------- */

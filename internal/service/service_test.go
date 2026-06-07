@@ -16,9 +16,9 @@ type repoMock struct {
 	saveCalls int
 }
 
-func (r *repoMock) Save(ctx context.Context, alias string, original string) error {
+func (r *repoMock) Save(ctx context.Context, alias string, original string) (string, error) {
 	r.saveCalls++
-	return r.err
+	return alias, r.err
 }
 
 func (r *repoMock) Get(ctx context.Context, alias string) (string, error) {
