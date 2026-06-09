@@ -17,6 +17,7 @@ const aliasSize = 6
 type BusinessService interface {
 	GetOriginalURL(ctx context.Context, alias string) (original string, err error)
 	CreateURLAlias(ctx context.Context, original string) (alias string, err error)
+	CreateURLAliasBatch(ctx context.Context, originals []string) (written map[string]string, err error)
 }
 
 type HealthService interface {
@@ -231,8 +232,6 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 
 /* -------------------------------------------------------------------------- */
 func (h *Handler) CreateJsonBatch(c *echo.Context) error {
-	var requestData []jsonBatchRequestItem
-	var responseData []jsonBatchResponseItem
 
 	log := h.log.With().Str("op", "handler.CreateJsonBatch").Logger()
 
@@ -240,6 +239,8 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	// Reading body
+	var requestData []jsonBatchRequestItem
+
 	if err := c.Bind(&requestData); err != nil {
 		log.Info().
 			Err(err).
@@ -248,9 +249,11 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
 	}
 
-	// Processing each item
+	batchSize := len(requestData)
+
+	// Validating each item
 	for _, item := range requestData {
-		// Validating
+
 		if err := c.Validate(&item); err != nil {
 			log.Info().
 				Err(err).
@@ -259,28 +262,49 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 
 			return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
 		}
+	}
 
-		// Getting alias
-		alias, err := h.business.CreateURLAlias(ctx, item.Original)
-		if err != nil && !errors.Is(err, domain.ErrOriginalURLDuplicate) {
+	// Preparing list of originals
+
+	originals := make([]string, batchSize)
+	for i, item := range requestData {
+		originals[i] = item.Original
+	}
+
+	responseStatus := http.StatusCreated
+
+	// Getting aliases
+
+	written, err := h.business.CreateURLAliasBatch(ctx, originals)
+	if err != nil {
+
+		if errors.Is(err, domain.ErrOriginalURLDuplicate) {
+			responseStatus = http.StatusConflict
+		} else {
 			log.Error().
 				Err(err).
-				Str("correlation_id", item.ID).
-				Str("original_url", item.Original).
 				Msg("alias creation failed")
 
 			return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		}
-
-		// Add to response
-		responseDataResult, _ := url.JoinPath(h.cfg.GetURLBase(), alias)
-		responseData = append(responseData, jsonBatchResponseItem{
-			ID:     item.ID,
-			Result: responseDataResult,
-		})
 	}
 
-	return c.JSON(http.StatusCreated, responseData)
+	// Filling response
+
+	// Same size as request. Even if there are URLs duplicates, correlation-id is major priority
+	responseData := make([]jsonBatchResponseItem, batchSize)
+
+	for i := range batchSize {
+		original := requestData[i].Original
+		alias := written[original]
+		responseDataResult, _ := url.JoinPath(h.cfg.GetURLBase(), alias)
+		responseData[i] = jsonBatchResponseItem{
+			ID:     requestData[i].ID,
+			Result: responseDataResult,
+		}
+	}
+
+	return c.JSON(responseStatus, responseData)
 }
 
 /* -------------------------------------------------------------------------- */

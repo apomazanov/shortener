@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Masterminds/squirrel"
 	"github.com/apomazanov/shortener/internal/domain"
 	"github.com/apomazanov/shortener/migrations"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,9 +18,15 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+const (
+	constraintUniqueAlias    = "idx_urls_unique_alias"
+	constraintUniqueOriginal = "idx_urls_unique_original"
+)
+
 type pgxPooler interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	Ping(ctx context.Context) error
 	Close()
 }
@@ -95,7 +103,7 @@ func NewPostgresStorage(cfg PostgresConfig) (*PostgresStorage, error) {
 }
 
 /* -------------------------------------------------------------------------- */
-func (r *PostgresStorage) Save(ctx context.Context, alias string, original string) (usedAlias string, err error) {
+func (r *PostgresStorage) Save(ctx context.Context, alias string, original string) (writtenAlias string, err error) {
 	if err := ctx.Err(); err != nil {
 		return "", fmt.Errorf("repo: save aborted: %w", err)
 	}
@@ -104,37 +112,116 @@ func (r *PostgresStorage) Save(ctx context.Context, alias string, original strin
 	queryCtx, cancel := context.WithTimeout(queryCtx, 3*time.Second)
 	defer cancel()
 
-	// check if original URL already saved
+	// creating query
 
-	var existingAlias string
-	query := `SELECT alias FROM urls WHERE original = $1`
-	err = r.pool.QueryRow(queryCtx, query, original).Scan(&existingAlias)
-	if err == nil {
-		return existingAlias, domain.ErrOriginalURLDuplicate
-	}
-
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return "", fmt.Errorf("repo: database error: %w", err)
-	}
-
-	// creating new db record
-
-	query = `
+	query := `
 		INSERT INTO urls (alias, original)
 		VALUES ($1, $2)
-		ON CONFLICT (alias) DO NOTHING;
+		ON CONFLICT (original) DO UPDATE SET original = EXCLUDED.original
+		RETURNING alias;
 	`
 
-	cmdTag, err := r.pool.Exec(queryCtx, query, alias, original)
+	// executing
+
+	err = r.pool.QueryRow(queryCtx, query, alias, original).Scan(&writtenAlias)
+
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			if pgErr.ConstraintName == constraintUniqueAlias {
+				return "", domain.ErrAliasDuplicate
+			}
+		}
+
 		return "", fmt.Errorf("repo: database error: %w", err)
 	}
 
-	if cmdTag.RowsAffected() == 0 {
-		return "", domain.ErrAliasDuplicate
+	if alias != writtenAlias {
+		return writtenAlias, domain.ErrOriginalURLDuplicate
 	}
 
-	return alias, nil
+	return writtenAlias, nil
+}
+
+/* -------------------------------------------------------------------------- */
+func (r *PostgresStorage) SaveBatch(ctx context.Context, toWrite map[string]string) (written map[string]string, err error) {
+
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("repo: batch save aborted: %w", err)
+	}
+
+	if len(toWrite) == 0 {
+		return nil, nil
+	}
+
+	queryCtx := context.WithoutCancel(ctx)
+	queryCtx, cancel := context.WithTimeout(queryCtx, 3*time.Second)
+	defer cancel()
+
+	// creating query
+
+	builder := squirrel.StatementBuilder.
+		PlaceholderFormat(squirrel.Dollar).
+		Insert("urls").
+		Columns("alias", "original")
+
+	for original, alias := range toWrite {
+		builder = builder.Values(alias, original)
+	}
+
+	builder = builder.Suffix("ON CONFLICT (original) DO UPDATE SET original = EXCLUDED.original RETURNING alias, original")
+
+	query, args, err := builder.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("repo: cannot build batch query: %w", err)
+	}
+
+	// executing
+
+	rows, err := r.pool.Query(queryCtx, query, args...)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			if pgErr.ConstraintName == constraintUniqueAlias {
+				// dropping full batch
+				return nil, domain.ErrAliasDuplicate
+			}
+		}
+
+		return nil, fmt.Errorf("repo: batch database error: %w", err)
+	}
+	defer rows.Close()
+
+	// reading data and parsing
+
+	written = make(map[string]string, len(toWrite))
+	isOriginalConflict := false
+
+	for rows.Next() {
+		var alias, original string
+
+		err = rows.Scan(&alias, &original)
+		if err != nil {
+			return nil, fmt.Errorf("repo: batch cannot scan row: %w", err)
+		}
+
+		written[original] = alias
+
+		if alias != toWrite[original] {
+			isOriginalConflict = true
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repo: batch database error: %w", err)
+	}
+
+	if isOriginalConflict {
+		return written, domain.ErrOriginalURLDuplicate
+	}
+
+	return written, nil
+
 }
 
 /* -------------------------------------------------------------------------- */

@@ -51,7 +51,7 @@ func run(log *zerolog.Logger) error {
 		r, err = repository.NewLocalStorage(cfg, log)
 	} else {
 		log.Info().Msg("run: initializing memory storage")
-		r = repository.NewMemStorage(log)
+		r = repository.NewMemStorage()
 	}
 
 	if err != nil {

@@ -12,6 +12,7 @@ import (
 
 type Repo interface {
 	Save(ctx context.Context, alias string, original string) (usedAlias string, err error)
+	SaveBatch(ctx context.Context, toWrite map[string]string) (written map[string]string, err error)
 	Get(ctx context.Context, alias string) (original string, err error)
 }
 
@@ -79,4 +80,37 @@ func (s *Service) CreateURLAlias(ctx context.Context, original string) (alias st
 	}
 
 	return "", fmt.Errorf("service: alias gen retry limit exceeded: %w", domain.ErrSaveRetryLimitExceeded)
+}
+
+/* -------------------------------------------------------------------------- */
+func (s *Service) CreateURLAliasBatch(ctx context.Context, originals []string) (writtenData map[string]string, err error) {
+	const maxRetries = 5
+
+	// original -> alias
+	dataToWrite := make(map[string]string)
+
+	for range maxRetries {
+
+		for _, original := range originals {
+			alias := s.newAlias()
+			dataToWrite[original] = alias
+		}
+
+		writtenData, err := s.repo.SaveBatch(ctx, dataToWrite)
+
+		if err == nil || errors.Is(err, domain.ErrOriginalURLDuplicate) {
+			return writtenData, err
+		}
+
+		if errors.Is(err, domain.ErrAliasDuplicate) {
+			// if alias duplicate met, generating new aliases for full batch
+			clear(dataToWrite)
+			continue
+		}
+
+		// error is not dublicate, smth wrong
+		return nil, fmt.Errorf("service: cannot create batch of URL aliases: %w", err)
+	}
+
+	return nil, fmt.Errorf("service: batch of aliases gen retry limit exceeded: %w", domain.ErrSaveRetryLimitExceeded)
 }

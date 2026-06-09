@@ -32,6 +32,7 @@ func TestFileRepo(t *testing.T) {
 		repo, err := NewLocalStorage(cfg, &logger)
 		require.NoError(t, err)
 		assert.NotNil(t, repo)
+		defer repo.Close()
 
 		_, err = os.Stat(dbFile)
 		assert.NoError(t, err)
@@ -58,6 +59,7 @@ func TestFileRepo(t *testing.T) {
 		testFile := filepath.Join(t.TempDir(), "dup.json")
 		repo, err := NewLocalStorage(&mockRepoConfig{file: testFile}, &logger)
 		require.NoError(t, err)
+		defer repo.Close()
 
 		alias := "dup"
 		original := "http://example.com"
@@ -74,6 +76,7 @@ func TestFileRepo(t *testing.T) {
 		testFile := filepath.Join(t.TempDir(), "existing_url.json")
 		repo, err := NewLocalStorage(&mockRepoConfig{file: testFile}, &logger)
 		require.NoError(t, err)
+		defer repo.Close()
 
 		alias1 := "alias1"
 		original := "http://example.com"

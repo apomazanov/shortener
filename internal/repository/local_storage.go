@@ -1,11 +1,13 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"sync"
@@ -144,6 +146,81 @@ func (r *LocalStorage) Save(ctx context.Context, alias string, original string) 
 	r.lastUUID = newLastUUID
 
 	return alias, nil
+}
+
+/* -------------------------------------------------------------------------- */
+func (r *LocalStorage) SaveBatch(ctx context.Context, toWrite map[string]string) (written map[string]string, err error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("repo: batch save aborted: %w", err)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Check for alias duplicates to ensure atomicity
+	seenInBatch := make(map[string]bool)
+	for _, alias := range toWrite {
+		if _, exists := r.cache[alias]; exists {
+			return nil, domain.ErrAliasDuplicate
+		}
+		if seenInBatch[alias] {
+			return nil, domain.ErrAliasDuplicate
+		}
+		seenInBatch[alias] = true
+	}
+
+	written = make(map[string]string, len(toWrite))
+
+	// Temporary buffer and cache for atomicity of disk i/o operation
+	var buf bytes.Buffer
+	tempEncoder := json.NewEncoder(&buf)
+	tempCache := make(map[string]string)
+
+	isOriginalConflict := false
+	currentUUID := r.lastUUID
+
+MainLoop:
+	for original, alias := range toWrite {
+
+		// Check original duplicate
+
+		for k, v := range r.cache {
+			if v == original {
+				written[original] = k
+				isOriginalConflict = true
+				continue MainLoop
+			}
+		}
+
+		// Appending
+
+		// Preparing data
+		currentUUID++
+		entry := entry{UUID: currentUUID, Alias: alias, Original: original}
+
+		// Write to temporary buffer first
+		if err := tempEncoder.Encode(entry); err != nil {
+			return nil, fmt.Errorf("repo: batch JSON encode error: %w", err)
+		}
+
+		tempCache[alias] = original
+		written[original] = alias
+	}
+
+	// Finalizing write to file
+	if _, err := buf.WriteTo(r.file); err != nil {
+		return nil, fmt.Errorf("repo: batch file write error: %w", err)
+	}
+
+	// Updating actual cache only after successful file write
+	maps.Copy(r.cache, tempCache)
+	r.lastUUID = currentUUID
+
+	if isOriginalConflict {
+		return written, domain.ErrOriginalURLDuplicate
+	}
+
+	return written, nil
 }
 
 /* -------------------------------------------------------------------------- */

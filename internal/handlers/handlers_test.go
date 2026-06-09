@@ -20,6 +20,7 @@ import (
 type businessMock struct {
 	original string
 	alias    string
+	batch    map[string]string
 	err      error
 }
 
@@ -29,6 +30,10 @@ func (b *businessMock) GetOriginalURL(ctx context.Context, alias string) (origin
 
 func (b *businessMock) CreateURLAlias(ctx context.Context, original string) (alias string, err error) {
 	return b.alias, b.err
+}
+
+func (b *businessMock) CreateURLAliasBatch(ctx context.Context, originals []string) (map[string]string, error) {
+	return b.batch, b.err
 }
 
 /* ------------------------------- Health mock ------------------------------ */
@@ -189,7 +194,7 @@ func TestHandler_CreateJson(t *testing.T) {
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		resp := httptest.NewRecorder()
 		c := e.NewContext(req, resp)
-		b.alias = ""
+		b.batch = nil
 		b.err = errors.New("some service error")
 		v.err = nil
 
@@ -394,7 +399,10 @@ func TestHandler_CreateJsonBatch(t *testing.T) {
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		resp := httptest.NewRecorder()
 		c := e.NewContext(req, resp)
-		b.alias = "short1"
+		b.batch = map[string]string{
+			"https://google.com": "short1",
+			"https://yandex.ru":  "short2",
+		}
 		b.err = nil
 		v.err = nil
 
@@ -402,7 +410,7 @@ func TestHandler_CreateJsonBatch(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusCreated, resp.Code)
-		assert.JSONEq(t, `[{"correlation_id":"1","short_url":"ba.se/short1"},{"correlation_id":"2","short_url":"ba.se/short1"}]`, resp.Body.String())
+		assert.JSONEq(t, `[{"correlation_id":"1","short_url":"ba.se/short1"},{"correlation_id":"2","short_url":"ba.se/short2"}]`, resp.Body.String())
 	})
 }
 

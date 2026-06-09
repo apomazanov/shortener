@@ -12,6 +12,7 @@ import (
 /* ------------------------------- Repo mock -------------------------------- */
 type repoMock struct {
 	original  string
+	batch     map[string]string
 	err       error
 	saveCalls int
 }
@@ -19,6 +20,11 @@ type repoMock struct {
 func (r *repoMock) Save(ctx context.Context, alias string, original string) (string, error) {
 	r.saveCalls++
 	return alias, r.err
+}
+
+func (r *repoMock) SaveBatch(ctx context.Context, toWrite map[string]string) (map[string]string, error) {
+	r.saveCalls++
+	return r.batch, r.err
 }
 
 func (r *repoMock) Get(ctx context.Context, alias string) (string, error) {
@@ -101,5 +107,51 @@ func TestCreateURLAlias(t *testing.T) {
 		assert.ErrorIs(t, err, domain.ErrSaveRetryLimitExceeded)
 		assert.Empty(t, alias)
 		assert.Equal(t, 5, repo.saveCalls)
+	})
+}
+
+/* -------------------------------------------------------------------------- */
+func TestCreateURLAliasBatch(t *testing.T) {
+	repo := &repoMock{}
+	s := New(repo)
+	ctx := context.Background()
+	urls := []string{"http://url1.com", "http://url2.com"}
+
+	t.Run("success", func(t *testing.T) {
+		repo.err = nil
+		repo.saveCalls = 0
+		repo.batch = map[string]string{
+			"http://url1.com": "a1",
+			"http://url2.com": "a2",
+		}
+
+		res, err := s.CreateURLAliasBatch(ctx, urls)
+
+		assert.NoError(t, err)
+		assert.Len(t, res, 2)
+		assert.Equal(t, 1, repo.saveCalls)
+	})
+
+	t.Run("retry on alias collision", func(t *testing.T) {
+		repo.saveCalls = 0
+		// First call fails with alias duplicate, second succeeds
+		repo.err = domain.ErrAliasDuplicate
+
+		// Note: The current service implementation retries the full batch.
+		// After 5 attempts it will return error if we don't change repo.err.
+		_, err := s.CreateURLAliasBatch(ctx, urls)
+		assert.ErrorIs(t, err, domain.ErrSaveRetryLimitExceeded)
+		assert.Equal(t, 5, repo.saveCalls)
+	})
+
+	t.Run("original conflict", func(t *testing.T) {
+		repo.err = domain.ErrOriginalURLDuplicate
+		repo.saveCalls = 0
+		repo.batch = map[string]string{"http://url1.com": "existing"}
+
+		res, err := s.CreateURLAliasBatch(ctx, urls)
+
+		assert.ErrorIs(t, err, domain.ErrOriginalURLDuplicate)
+		assert.NotNil(t, res)
 	})
 }

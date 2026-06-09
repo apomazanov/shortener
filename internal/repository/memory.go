@@ -3,10 +3,10 @@ package repository
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sync"
 
 	"github.com/apomazanov/shortener/internal/domain"
-	"github.com/rs/zerolog"
 )
 
 type MemStorage struct {
@@ -15,7 +15,7 @@ type MemStorage struct {
 }
 
 /* -------------------------------------------------------------------------- */
-func NewMemStorage(log *zerolog.Logger) *MemStorage {
+func NewMemStorage() *MemStorage {
 	return &MemStorage{cache: make(map[string]string)}
 }
 
@@ -47,6 +47,59 @@ func (r *MemStorage) Save(ctx context.Context, alias string, original string) (u
 	r.cache[alias] = original
 
 	return alias, nil
+}
+
+/* -------------------------------------------------------------------------- */
+func (r *MemStorage) SaveBatch(ctx context.Context, toWrite map[string]string) (written map[string]string, err error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("repo: batch save aborted: %w", err)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Check for alias duplicates (in cache and within the batch) to ensure atomicity
+	seenInBatch := make(map[string]bool)
+	for _, alias := range toWrite {
+		if _, exists := r.cache[alias]; exists {
+			return nil, domain.ErrAliasDuplicate
+		}
+		if seenInBatch[alias] {
+			return nil, domain.ErrAliasDuplicate
+		}
+		seenInBatch[alias] = true
+	}
+
+	written = make(map[string]string, len(toWrite))
+	tempCache := make(map[string]string)
+	isOriginalConflict := false
+
+MainLoop:
+	for original, alias := range toWrite {
+
+		// Check original duplicate
+
+		for k, v := range r.cache {
+			if v == original {
+				written[original] = k
+				isOriginalConflict = true
+				continue MainLoop
+			}
+		}
+
+		// Appending
+
+		tempCache[alias] = original
+		written[original] = alias
+	}
+
+	maps.Copy(r.cache, tempCache)
+
+	if isOriginalConflict {
+		return written, domain.ErrOriginalURLDuplicate
+	}
+
+	return written, nil
 }
 
 /* -------------------------------------------------------------------------- */
