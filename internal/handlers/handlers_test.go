@@ -16,20 +16,33 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-/* ------------------------------ Service mock ------------------------------ */
-type serviceMock struct {
+/* ------------------------------ Business mock ----------------------------- */
+type businessMock struct {
 	original string
 	alias    string
+	batch    map[string]string
 	err      error
 }
 
-func (s *serviceMock) GetOriginalURL(ctx context.Context, alias string) (original string, err error) {
-	return s.original, s.err
+func (b *businessMock) GetOriginalURL(ctx context.Context, alias string) (original string, err error) {
+	return b.original, b.err
 }
 
-func (s *serviceMock) CreateURLAlias(ctx context.Context, original string) (alias string, err error) {
-	return s.alias, s.err
+func (b *businessMock) CreateURLAlias(ctx context.Context, original string) (alias string, err error) {
+	return b.alias, b.err
+}
 
+func (b *businessMock) CreateURLAliasBatch(ctx context.Context, originals []string) (map[string]string, error) {
+	return b.batch, b.err
+}
+
+/* ------------------------------- Health mock ------------------------------ */
+type healthMock struct {
+	err error
+}
+
+func (h *healthMock) Ping(ctx context.Context) error {
+	return h.err
 }
 
 /* ------------------------------- Config mock ------------------------------ */
@@ -57,10 +70,11 @@ func (v *valMock) Validate(i any) error {
 
 /* -------------------------------------------------------------------------- */
 func TestHandler_CreateText(t *testing.T) {
-	s := &serviceMock{}
+	b := &businessMock{}
 	l := zerolog.New(os.Stdout)
 	cfg := &cfgMock{baseURL: "ba.se", aliasSize: 6}
-	h := New(s, cfg, &l)
+	health := &healthMock{}
+	h := New(b, cfg, &l, health)
 	v := valMock{}
 	e := echo.New()
 	e.Validator = &v
@@ -74,9 +88,9 @@ func TestHandler_CreateText(t *testing.T) {
 		err := h.CreateText(c)
 
 		require.Error(t, err)
-		var errHttp *echo.HTTPError
-		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusBadRequest, errHttp.Code)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusBadRequest, errHTTP.Code)
 		}
 	})
 
@@ -85,16 +99,16 @@ func TestHandler_CreateText(t *testing.T) {
 		resp := httptest.NewRecorder()
 		c := e.NewContext(req, resp)
 		// mocking response from service
-		s.alias = ""
-		s.err = errors.New("some error")
+		b.alias = ""
+		b.err = errors.New("some error")
 		v.err = nil
 
 		err := h.CreateText(c)
 
 		require.Error(t, err)
-		var errHttp *echo.HTTPError
-		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusInternalServerError, errHttp.Code)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusInternalServerError, errHTTP.Code)
 		}
 	})
 
@@ -103,8 +117,8 @@ func TestHandler_CreateText(t *testing.T) {
 		resp := httptest.NewRecorder()
 		c := e.NewContext(req, resp)
 		// mocking response from service
-		s.alias = "short1"
-		s.err = nil
+		b.alias = "short1"
+		b.err = nil
 		v.err = nil
 
 		err := h.CreateText(c)
@@ -113,14 +127,31 @@ func TestHandler_CreateText(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, resp.Code)
 		assert.Equal(t, cfg.baseURL+"/short1", resp.Body.String())
 	})
+
+	t.Run("conflict", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("google.com"))
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		// mocking response from service
+		b.alias = "existing_short"
+		b.err = domain.ErrOriginalURLDuplicate
+		v.err = nil
+
+		err := h.CreateText(c)
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusConflict, resp.Code)
+		assert.Equal(t, cfg.baseURL+"/existing_short", resp.Body.String())
+	})
 }
 
 /* -------------------------------------------------------------------------- */
 func TestHandler_CreateJson(t *testing.T) {
-	s := &serviceMock{}
+	b := &businessMock{}
 	l := zerolog.New(os.Stdout)
 	cfg := &cfgMock{baseURL: "ba.se", aliasSize: 6}
-	h := New(s, cfg, &l)
+	health := &healthMock{}
+	h := New(b, cfg, &l, health)
 	v := valMock{}
 	e := echo.New()
 	e.Validator = &v
@@ -135,10 +166,10 @@ func TestHandler_CreateJson(t *testing.T) {
 		err := h.CreateJson(c)
 
 		require.Error(t, err)
-		var errHttp *echo.HTTPError
-		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusBadRequest, errHttp.Code)
-			assert.NotEmpty(t, errHttp.Message)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusBadRequest, errHTTP.Code)
+			assert.NotEmpty(t, errHTTP.Message)
 		}
 	})
 
@@ -152,9 +183,9 @@ func TestHandler_CreateJson(t *testing.T) {
 		err := h.CreateJson(c)
 
 		require.Error(t, err)
-		var errHttp *echo.HTTPError
-		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusBadRequest, errHttp.Code)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusBadRequest, errHTTP.Code)
 		}
 	})
 
@@ -163,16 +194,16 @@ func TestHandler_CreateJson(t *testing.T) {
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		resp := httptest.NewRecorder()
 		c := e.NewContext(req, resp)
-		s.alias = ""
-		s.err = errors.New("some service error")
+		b.batch = nil
+		b.err = errors.New("some service error")
 		v.err = nil
 
 		err := h.CreateJson(c)
 
 		require.Error(t, err)
-		var errHttp *echo.HTTPError
-		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusInternalServerError, errHttp.Code)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusInternalServerError, errHTTP.Code)
 		}
 	})
 
@@ -181,8 +212,8 @@ func TestHandler_CreateJson(t *testing.T) {
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		resp := httptest.NewRecorder()
 		c := e.NewContext(req, resp)
-		s.alias = "short1"
-		s.err = nil
+		b.alias = "short1"
+		b.err = nil
 		v.err = nil
 
 		err := h.CreateJson(c)
@@ -191,14 +222,31 @@ func TestHandler_CreateJson(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, resp.Code)
 		assert.JSONEq(t, `{"result":"ba.se/short1"}`, resp.Body.String())
 	})
+
+	t.Run("conflict", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"url": "https://google.com"}`))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		b.alias = "existing_short"
+		b.err = domain.ErrOriginalURLDuplicate
+		v.err = nil
+
+		err := h.CreateJson(c)
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusConflict, resp.Code)
+		assert.JSONEq(t, `{"result":"ba.se/existing_short"}`, resp.Body.String())
+	})
 }
 
 /* -------------------------------------------------------------------------- */
 func TestHandler_Get(t *testing.T) {
-	s := &serviceMock{}
+	b := &businessMock{}
 	l := zerolog.New(os.Stdout)
 	cfg := &cfgMock{baseURL: "ba.se", aliasSize: 6}
-	h := New(s, cfg, &l)
+	health := &healthMock{}
+	h := New(b, cfg, &l, health)
 	e := echo.New()
 
 	t.Run("success", func(t *testing.T) {
@@ -210,8 +258,8 @@ func TestHandler_Get(t *testing.T) {
 			{Name: "alias", Value: "abcdef"},
 		})
 		// mocking response from service
-		s.original = "abracadabra1"
-		s.err = nil
+		b.original = "abracadabra1"
+		b.err = nil
 
 		err := h.Get(c)
 
@@ -229,15 +277,15 @@ func TestHandler_Get(t *testing.T) {
 			{Name: "alias", Value: "abcdef"},
 		})
 		// mocking response from service
-		s.original = ""
-		s.err = domain.ErrNotFound
+		b.original = ""
+		b.err = domain.ErrNotFound
 
 		err := h.Get(c)
 
 		require.Error(t, err)
-		var errHttp *echo.HTTPError
-		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusNotFound, errHttp.Code)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusNotFound, errHTTP.Code)
 		}
 	})
 
@@ -250,15 +298,15 @@ func TestHandler_Get(t *testing.T) {
 			{Name: "alias", Value: "abcdef"},
 		})
 		// mocking response from service
-		s.original = ""
-		s.err = errors.New("some error")
+		b.original = ""
+		b.err = errors.New("some error")
 
 		err := h.Get(c)
 
 		require.Error(t, err)
-		var errHttp *echo.HTTPError
-		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusInternalServerError, errHttp.Code)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusInternalServerError, errHTTP.Code)
 		}
 	})
 
@@ -274,20 +322,142 @@ func TestHandler_Get(t *testing.T) {
 		err := h.Get(c)
 
 		require.Error(t, err)
-		var errHttp *echo.HTTPError
-		if errors.As(err, &errHttp) {
-			assert.Equal(t, http.StatusBadRequest, errHttp.Code)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusBadRequest, errHTTP.Code)
 		}
 	})
 
 }
 
 /* -------------------------------------------------------------------------- */
-func TestHandler_Reject(t *testing.T) {
-	s := &serviceMock{}
+func TestHandler_CreateJsonBatch(t *testing.T) {
+	b := &businessMock{}
 	l := zerolog.New(os.Stdout)
 	cfg := &cfgMock{baseURL: "ba.se", aliasSize: 6}
-	h := New(s, cfg, &l)
+	health := &healthMock{}
+	h := New(b, cfg, &l, health)
+	v := valMock{}
+	e := echo.New()
+	e.Validator = &v
+
+	t.Run("malformed json body", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("invalid json"))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+
+		err := h.CreateJsonBatch(c)
+
+		require.Error(t, err)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusBadRequest, errHTTP.Code)
+		}
+	})
+
+	t.Run("validation error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`[{"correlation_id": ""}]`))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		v.err = errors.New("validation error")
+
+		err := h.CreateJsonBatch(c)
+
+		require.Error(t, err)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusBadRequest, errHTTP.Code)
+		}
+	})
+
+	t.Run("service error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`[{"correlation_id": "1", "original_url": "https://google.com"}]`))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		b.alias = ""
+		b.err = errors.New("some service error")
+		v.err = nil
+
+		err := h.CreateJsonBatch(c)
+
+		require.Error(t, err)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusInternalServerError, errHTTP.Code)
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		reqBody := `[
+			{"correlation_id": "1", "original_url": "https://google.com"},
+			{"correlation_id": "2", "original_url": "https://yandex.ru"}
+		]`
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(reqBody))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		b.batch = map[string]string{
+			"https://google.com": "short1",
+			"https://yandex.ru":  "short2",
+		}
+		b.err = nil
+		v.err = nil
+
+		err := h.CreateJsonBatch(c)
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusCreated, resp.Code)
+		assert.JSONEq(t, `[{"correlation_id":"1","short_url":"ba.se/short1"},{"correlation_id":"2","short_url":"ba.se/short2"}]`, resp.Body.String())
+	})
+}
+
+/* -------------------------------------------------------------------------- */
+func TestHandler_Ping(t *testing.T) {
+	b := &businessMock{}
+	l := zerolog.New(os.Stdout)
+	cfg := &cfgMock{baseURL: "ba.se", aliasSize: 6}
+	health := &healthMock{}
+	h := New(b, cfg, &l, health)
+	e := echo.New()
+
+	t.Run("success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		health.err = nil
+
+		err := h.Ping(c)
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.Code)
+	})
+
+	t.Run("health check failed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+		resp := httptest.NewRecorder()
+		c := e.NewContext(req, resp)
+		health.err = errors.New("ping error")
+
+		err := h.Ping(c)
+
+		require.Error(t, err)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusInternalServerError, errHTTP.Code)
+		}
+	})
+}
+
+/* -------------------------------------------------------------------------- */
+func TestHandler_Reject(t *testing.T) {
+	b := &businessMock{}
+	l := zerolog.New(os.Stdout)
+	cfg := &cfgMock{baseURL: "ba.se", aliasSize: 6}
+	health := &healthMock{}
+	h := New(b, cfg, &l, health)
 	e := echo.New()
 
 	t.Run("return BadRequest", func(t *testing.T) {
@@ -298,8 +468,9 @@ func TestHandler_Reject(t *testing.T) {
 		err := h.Reject(c)
 
 		require.Error(t, err)
-		http_err, ok := err.(*echo.HTTPError)
-		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, http_err.Code)
+		var errHTTP *echo.HTTPError
+		if errors.As(err, &errHTTP) {
+			assert.Equal(t, http.StatusBadRequest, errHTTP.Code)
+		}
 	})
 }

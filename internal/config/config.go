@@ -10,20 +10,22 @@ import (
 )
 
 type Config struct {
-	ServerAddr  string `env:"SERVER_ADDRESS"`
-	BaseURL     string `env:"BASE_URL"`
-	AliasSize   int    `env:"ALIAS_SIZE"`
-	StorageFile string `env:"FILE_STORAGE_PATH"`
+	ServerAddr    string `env:"SERVER_ADDRESS"`
+	BaseURL       string `env:"BASE_URL"`
+	StorageFile   string `env:"FILE_STORAGE_PATH"`
+	DatabaseDSN   string `env:"DATABASE_DSN"`
+	NoDBMigration bool   `env:"NO_DB_MIGRATION"`
 }
 
 /* -------------------------------------------------------------------------- */
 func New(args []string) (*Config, error) {
 
 	cfg := Config{
-		ServerAddr:  ":8080",
-		BaseURL:     "http://localhost:8080",
-		AliasSize:   6,
-		StorageFile: "./data/db.json",
+		ServerAddr:    ":8080",
+		BaseURL:       "http://localhost:8080",
+		StorageFile:   "",
+		DatabaseDSN:   "",
+		NoDBMigration: false,
 	}
 
 	// Flags overwrite default values
@@ -33,6 +35,7 @@ func New(args []string) (*Config, error) {
 	fs.StringVar(&cfg.BaseURL, "b", cfg.BaseURL, "Base URL for aliases")
 	fs.StringVar(&cfg.ServerAddr, "a", cfg.ServerAddr, "HTTP-server address:port")
 	fs.StringVar(&cfg.StorageFile, "f", cfg.StorageFile, "Storage file path")
+	fs.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "Database DSN")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, fmt.Errorf("flags parsing failed: %w", err)
@@ -64,11 +67,16 @@ func (c *Config) GetURLBase() string {
 }
 
 /* -------------------------------------------------------------------------- */
-func (c *Config) GetAliasSize() int {
-	return c.AliasSize
+func (c *Config) GetStorageFile() string {
+	return c.StorageFile
 }
 
 /* -------------------------------------------------------------------------- */
-func (c *Config) GetStorageFile() string {
-	return c.StorageFile
+func (c *Config) GetDatabaseDSN() string {
+	return c.DatabaseDSN
+}
+
+/* -------------------------------------------------------------------------- */
+func (c *Config) GetNoDBMigration() bool {
+	return c.NoDBMigration
 }

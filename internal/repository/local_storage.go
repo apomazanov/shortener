@@ -1,11 +1,13 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"sync"
@@ -22,7 +24,7 @@ type LocalStorage struct {
 	lastUUID int
 }
 
-type RepoConfig interface {
+type LocalStorageConfig interface {
 	GetStorageFile() string
 }
 
@@ -33,7 +35,7 @@ type entry struct {
 }
 
 /* -------------------------------------------------------------------------- */
-func NewLocalStorage(cfg RepoConfig, log *zerolog.Logger) (*LocalStorage, error) {
+func NewLocalStorage(cfg LocalStorageConfig, log *zerolog.Logger) (*LocalStorage, error) {
 
 	storage := &LocalStorage{cache: make(map[string]string)}
 
@@ -70,6 +72,7 @@ func NewLocalStorage(cfg RepoConfig, log *zerolog.Logger) (*LocalStorage, error)
 				Msg("parsing error")
 
 			// bad record is just passed by, not interrupting
+			continue
 		}
 
 		storage.cache[e.Alias] = e.Original
@@ -105,36 +108,119 @@ func (r *LocalStorage) Close() error {
 }
 
 /* -------------------------------------------------------------------------- */
-func (r *LocalStorage) Save(ctx context.Context, alias string, original string) error {
+func (r *LocalStorage) Save(ctx context.Context, alias string, original string) (usedAlias string, err error) {
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("repo: save aborted: %w", err)
+		return "", fmt.Errorf("repo: save aborted: %w", err)
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// Searching for alias duplicates first
+	// Searching for original URL duplicates first
+
+	for k, v := range r.cache {
+		if v == original {
+			return k, domain.ErrOriginalURLDuplicate
+		}
+	}
+
+	// Searching for alias duplicates
 
 	if _, exists := r.cache[alias]; exists {
-		return domain.ErrDuplicate
+		return "", domain.ErrAliasDuplicate
 	}
 
 	// Appending
 
 	// Preparing data
-	newLastUuid := r.lastUUID + 1
-	entry := entry{UUID: newLastUuid, Alias: alias, Original: original}
+	newLastUUID := r.lastUUID + 1
+	entry := entry{UUID: newLastUUID, Alias: alias, Original: original}
 
 	// Writing
 	if err := r.encoder.Encode(entry); err != nil {
-		return fmt.Errorf("repo: JSON encode error: %w", err)
+		return "", fmt.Errorf("repo: JSON encode error: %w", err)
 	}
 
 	// Updating cache, if data write was successful
 	r.cache[alias] = original
-	r.lastUUID = newLastUuid
+	r.lastUUID = newLastUUID
 
-	return nil
+	return alias, nil
+}
+
+/* -------------------------------------------------------------------------- */
+func (r *LocalStorage) SaveBatch(ctx context.Context, toWrite map[string]string) (written map[string]string, err error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("repo: batch save aborted: %w", err)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Check for alias duplicates to ensure atomicity
+	seenInBatch := make(map[string]bool)
+	for _, alias := range toWrite {
+		if _, exists := r.cache[alias]; exists {
+			return nil, domain.ErrAliasDuplicate
+		}
+		if seenInBatch[alias] {
+			return nil, domain.ErrAliasDuplicate
+		}
+		seenInBatch[alias] = true
+	}
+
+	written = make(map[string]string, len(toWrite))
+
+	// Temporary buffer and cache for atomicity of disk i/o operation
+	var buf bytes.Buffer
+	tempEncoder := json.NewEncoder(&buf)
+	tempCache := make(map[string]string)
+
+	isOriginalConflict := false
+	currentUUID := r.lastUUID
+
+MainLoop:
+	for original, alias := range toWrite {
+
+		// Check original duplicate
+
+		for k, v := range r.cache {
+			if v == original {
+				written[original] = k
+				isOriginalConflict = true
+				continue MainLoop
+			}
+		}
+
+		// Appending
+
+		// Preparing data
+		currentUUID++
+		entry := entry{UUID: currentUUID, Alias: alias, Original: original}
+
+		// Write to temporary buffer first
+		if err := tempEncoder.Encode(entry); err != nil {
+			return nil, fmt.Errorf("repo: batch JSON encode error: %w", err)
+		}
+
+		tempCache[alias] = original
+		written[original] = alias
+	}
+
+	// Finalizing write to file
+	if _, err := buf.WriteTo(r.file); err != nil {
+		return nil, fmt.Errorf("repo: batch file write error: %w", err)
+	}
+
+	// Updating actual cache only after successful file write
+	maps.Copy(r.cache, tempCache)
+	r.lastUUID = currentUUID
+
+	if isOriginalConflict {
+		return written, domain.ErrOriginalURLDuplicate
+	}
+
+	return written, nil
 }
 
 /* -------------------------------------------------------------------------- */
@@ -152,4 +238,9 @@ func (r *LocalStorage) Get(ctx context.Context, alias string) (original string, 
 	}
 
 	return "", domain.ErrNotFound
+}
+
+/* -------------------------------------------------------------------------- */
+func (r *LocalStorage) Ping(ctx context.Context) error {
+	return nil
 }

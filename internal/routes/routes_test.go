@@ -22,7 +22,7 @@ func TestSetup(t *testing.T) {
 
 	foundGet := false
 	foundPostText := false
-	foundPostJson := false
+	foundPostJSON := false
 
 	for _, r := range routes {
 		if r.Method == "GET" && r.Path == "/:alias" {
@@ -32,11 +32,11 @@ func TestSetup(t *testing.T) {
 			foundPostText = true
 		}
 		if r.Method == "POST" && r.Path == "/api/shorten" {
-			foundPostJson = true
+			foundPostJSON = true
 		}
 	}
 
 	assert.True(t, foundGet)
 	assert.True(t, foundPostText)
-	assert.True(t, foundPostJson)
+	assert.True(t, foundPostJSON)
 }

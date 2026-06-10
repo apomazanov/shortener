@@ -32,6 +32,7 @@ func TestFileRepo(t *testing.T) {
 		repo, err := NewLocalStorage(cfg, &logger)
 		require.NoError(t, err)
 		assert.NotNil(t, repo)
+		defer repo.Close()
 
 		_, err = os.Stat(dbFile)
 		assert.NoError(t, err)
@@ -45,28 +46,53 @@ func TestFileRepo(t *testing.T) {
 		original := "http://example.com"
 		ctx := context.Background()
 
-		err = repo.Save(ctx, alias, original)
+		res, err := repo.Save(ctx, alias, original)
 		assert.NoError(t, err)
+		assert.Equal(t, alias, res)
 
-		res, err := repo.Get(ctx, alias)
+		resGet, err := repo.Get(ctx, alias)
 		assert.NoError(t, err)
-		assert.Equal(t, original, res)
+		assert.Equal(t, original, resGet)
 	})
 
 	t.Run("Duplicate Alias", func(t *testing.T) {
 		testFile := filepath.Join(t.TempDir(), "dup.json")
 		repo, err := NewLocalStorage(&mockRepoConfig{file: testFile}, &logger)
 		require.NoError(t, err)
+		defer repo.Close()
 
 		alias := "dup"
 		original := "http://example.com"
 		ctx := context.Background()
 
-		err = repo.Save(ctx, alias, original)
+		_, err = repo.Save(ctx, alias, original)
 		require.NoError(t, err)
 
-		err = repo.Save(ctx, alias, "http://another.com")
-		assert.ErrorIs(t, err, domain.ErrDuplicate)
+		_, err = repo.Save(ctx, alias, "http://another.com")
+		assert.ErrorIs(t, err, domain.ErrAliasDuplicate)
+	})
+
+	t.Run("Existing Original URL", func(t *testing.T) {
+		testFile := filepath.Join(t.TempDir(), "existing_url.json")
+		repo, err := NewLocalStorage(&mockRepoConfig{file: testFile}, &logger)
+		require.NoError(t, err)
+		defer repo.Close()
+
+		alias1 := "alias1"
+		original := "http://example.com"
+		ctx := context.Background()
+
+		// First save
+		res1, err := repo.Save(ctx, alias1, original)
+		require.NoError(t, err)
+		assert.Equal(t, alias1, res1)
+
+		// Second save with same URL but different suggested alias
+		alias2 := "alias2"
+		res2, err := repo.Save(ctx, alias2, original)
+		assert.ErrorIs(t, err, domain.ErrOriginalURLDuplicate)
+		// Should return the first alias instead of error or new entry
+		assert.Equal(t, alias1, res2)
 	})
 
 	t.Run("Persistence", func(t *testing.T) {
@@ -78,16 +104,16 @@ func TestFileRepo(t *testing.T) {
 		// First instance: Save data
 		repo1, err := NewLocalStorage(&mockRepoConfig{file: testFile}, &logger)
 		require.NoError(t, err)
-		err = repo1.Save(ctx, alias, original)
+		_, err = repo1.Save(ctx, alias, original)
 		require.NoError(t, err)
 
 		// Second instance: Load data from the same file
 		repo2, err := NewLocalStorage(&mockRepoConfig{file: testFile}, &logger)
 		require.NoError(t, err)
 
-		res, err := repo2.Get(ctx, alias)
+		resGet, err := repo2.Get(ctx, alias)
 		assert.NoError(t, err)
-		assert.Equal(t, original, res)
+		assert.Equal(t, original, resGet)
 
 		// Verify cache was loaded correctly
 		cached, exists := repo2.cache[alias]
@@ -102,12 +128,12 @@ func TestFileRepo(t *testing.T) {
 		ctx := context.Background()
 
 		// Save first entry
-		err = repo.Save(ctx, "alias1", "http://url1.com")
+		_, err = repo.Save(ctx, "alias1", "http://url1.com")
 		require.NoError(t, err)
 		assert.Equal(t, 1, repo.lastUUID, "lastUUID should be 1 after first save")
 
 		// Save second entry
-		err = repo.Save(ctx, "alias2", "http://url2.com")
+		_, err = repo.Save(ctx, "alias2", "http://url2.com")
 		require.NoError(t, err)
 		assert.Equal(t, 2, repo.lastUUID, "lastUUID should be 2 after second save")
 

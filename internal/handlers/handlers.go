@@ -12,36 +12,54 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type Service interface {
+const aliasSize = 6
+
+type BusinessService interface {
 	GetOriginalURL(ctx context.Context, alias string) (original string, err error)
 	CreateURLAlias(ctx context.Context, original string) (alias string, err error)
+	CreateURLAliasBatch(ctx context.Context, originals []string) (written map[string]string, err error)
+}
+
+type HealthService interface {
+	Ping(ctx context.Context) error
 }
 
 type URLConfig interface {
 	GetURLBase() string
-	GetAliasSize() int
 }
 
 type Handler struct {
-	srv Service
-	cfg URLConfig
-	log *zerolog.Logger
+	business BusinessService
+	health   HealthService
+	cfg      URLConfig
+	log      *zerolog.Logger
 }
 
 type jsonShortenRequest struct {
-	Url string `json:"url" validate:"required,url"`
+	URL string `json:"url" validate:"required,url"`
 }
 
 type jsonShortenResponse struct {
 	Result string `json:"result"`
 }
 
+type jsonBatchRequestItem struct {
+	ID       string `json:"correlation_id" validate:"required"`
+	Original string `json:"original_url" validate:"required,url"`
+}
+
+type jsonBatchResponseItem struct {
+	ID     string `json:"correlation_id"`
+	Result string `json:"short_url"`
+}
+
 /* -------------------------------------------------------------------------- */
-func New(s Service, c URLConfig, l *zerolog.Logger) *Handler {
+func New(b BusinessService, c URLConfig, l *zerolog.Logger, h HealthService) *Handler {
 	return &Handler{
-		srv: s,
-		cfg: c,
-		log: l,
+		business: b,
+		health:   h,
+		cfg:      c,
+		log:      l,
 	}
 }
 
@@ -56,7 +74,7 @@ func (h *Handler) Get(c *echo.Context) error {
 	// Getting alias from request URL
 	alias := c.Param("alias")
 
-	if len(alias) != h.cfg.GetAliasSize() {
+	if len(alias) != aliasSize {
 		log.Info().
 			Str("alias", alias).
 			Msg("invalid alias")
@@ -65,7 +83,7 @@ func (h *Handler) Get(c *echo.Context) error {
 	}
 
 	// Find original URL
-	original, err := h.srv.GetOriginalURL(ctx, alias)
+	original, err := h.business.GetOriginalURL(ctx, alias)
 
 	if err == nil {
 		// Return original URL with redirection
@@ -88,6 +106,25 @@ func (h *Handler) Get(c *echo.Context) error {
 }
 
 /* -------------------------------------------------------------------------- */
+func (h *Handler) Ping(c *echo.Context) error {
+
+	log := h.log.With().Str("op", "handler.Ping").Logger()
+
+	ctx := c.Request().Context()
+
+	if err := h.health.Ping(ctx); err != nil {
+
+		log.Error().
+			Err(err).
+			Msg("health check failed")
+
+		return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+	}
+
+	return c.NoContent(http.StatusOK)
+}
+
+/* -------------------------------------------------------------------------- */
 func (h *Handler) CreateText(c *echo.Context) error {
 
 	log := h.log.With().Str("op", "handler.CreateText").Logger()
@@ -106,7 +143,7 @@ func (h *Handler) CreateText(c *echo.Context) error {
 	}
 
 	// Casting body to string, validating
-	requestData := jsonShortenRequest{Url: string(body)}
+	requestData := jsonShortenRequest{URL: string(body)}
 	if err := c.Validate(&requestData); err != nil {
 		log.Info().
 			Err(err).
@@ -116,22 +153,29 @@ func (h *Handler) CreateText(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
 	}
 
-	// Getting alias
-	alias, err := h.srv.CreateURLAlias(ctx, requestData.Url)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("alias", alias).
-			Msg("alias creation failed")
+	responseStatus := http.StatusCreated
 
-		return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+	// Getting alias
+	alias, err := h.business.CreateURLAlias(ctx, requestData.URL)
+	if err != nil {
+
+		if errors.Is(err, domain.ErrOriginalURLDuplicate) {
+			responseStatus = http.StatusConflict
+		} else {
+			log.Error().
+				Err(err).
+				Str("alias", alias).
+				Msg("alias creation failed")
+
+			return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		}
 	}
 
 	// Sending back short URL
 
 	// base URL already validated during config
 	shortUrl := h.cfg.GetURLBase() + "/" + alias
-	return c.String(http.StatusCreated, shortUrl)
+	return c.String(responseStatus, shortUrl)
 }
 
 /* -------------------------------------------------------------------------- */
@@ -163,20 +207,104 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
 	}
 
-	// Getting alias
-	alias, err := h.srv.CreateURLAlias(ctx, requestData.Url)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("alias", alias).
-			Msg("alias creation failed")
+	responseStatus := http.StatusCreated
 
-		return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+	// Getting alias
+	alias, err := h.business.CreateURLAlias(ctx, requestData.URL)
+	if err != nil {
+
+		if errors.Is(err, domain.ErrOriginalURLDuplicate) {
+			responseStatus = http.StatusConflict
+		} else {
+			log.Error().
+				Err(err).
+				Str("alias", alias).
+				Msg("alias creation failed")
+
+			return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		}
 	}
 
 	// Sending back short URL
 	responseData.Result, _ = url.JoinPath(h.cfg.GetURLBase(), alias)
-	return c.JSON(http.StatusCreated, responseData)
+	return c.JSON(responseStatus, responseData)
+}
+
+/* -------------------------------------------------------------------------- */
+func (h *Handler) CreateJsonBatch(c *echo.Context) error {
+
+	log := h.log.With().Str("op", "handler.CreateJsonBatch").Logger()
+
+	// Raw context for deeper layers, evading 'echo' dependency
+	ctx := c.Request().Context()
+
+	// Reading body
+	var requestData []jsonBatchRequestItem
+
+	if err := c.Bind(&requestData); err != nil {
+		log.Info().
+			Err(err).
+			Msg("failed to read request body")
+
+		return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
+	}
+
+	batchSize := len(requestData)
+
+	// Validating each item
+	for _, item := range requestData {
+
+		if err := c.Validate(&item); err != nil {
+			log.Info().
+				Err(err).
+				Any("request_item", item).
+				Msg("invalid request data")
+
+			return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
+		}
+	}
+
+	// Preparing list of originals
+
+	originals := make([]string, batchSize)
+	for i, item := range requestData {
+		originals[i] = item.Original
+	}
+
+	responseStatus := http.StatusCreated
+
+	// Getting aliases
+
+	written, err := h.business.CreateURLAliasBatch(ctx, originals)
+	if err != nil {
+
+		if errors.Is(err, domain.ErrOriginalURLDuplicate) {
+			responseStatus = http.StatusConflict
+		} else {
+			log.Error().
+				Err(err).
+				Msg("alias creation failed")
+
+			return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		}
+	}
+
+	// Filling response
+
+	// Same size as request. Even if there are URLs duplicates, correlation-id is major priority
+	responseData := make([]jsonBatchResponseItem, batchSize)
+
+	for i := range batchSize {
+		original := requestData[i].Original
+		alias := written[original]
+		responseDataResult, _ := url.JoinPath(h.cfg.GetURLBase(), alias)
+		responseData[i] = jsonBatchResponseItem{
+			ID:     requestData[i].ID,
+			Result: responseDataResult,
+		}
+	}
+
+	return c.JSON(responseStatus, responseData)
 }
 
 /* -------------------------------------------------------------------------- */
