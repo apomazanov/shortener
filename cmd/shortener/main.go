@@ -22,6 +22,7 @@ import (
 	"github.com/apomazanov/shortener/internal/validator"
 	"github.com/apomazanov/shortener/pkg/logger"
 
+	my_jwt "github.com/apomazanov/shortener/internal/jwt"
 	my_middleware "github.com/apomazanov/shortener/internal/middleware"
 )
 
@@ -31,7 +32,6 @@ type Repo interface {
 	Ping(ctx context.Context) error
 }
 
-/* -------------------------------------------------------------------------- */
 func run(log *zerolog.Logger) error {
 
 	cfg, err := config.New(os.Args[1:])
@@ -66,10 +66,19 @@ func run(log *zerolog.Logger) error {
 		}
 	}()
 
+	// JWT
+
+	jwtData := my_jwt.Data{
+		SigningKey: []byte(cfg.GetJWTSecret()),
+		CookieName: "auth_token",
+		TokenTTL:   24 * time.Hour,
+		CookieTTL:  72 * time.Hour,
+	}
+
 	// Service and handlers
 
 	s := service.New(r)
-	h := handlers.New(s, cfg, log, r)
+	h := handlers.New(s, cfg, log, r, &jwtData)
 
 	e := echo.New()
 	e.Validator = validator.New()
@@ -85,9 +94,11 @@ func run(log *zerolog.Logger) error {
 	e.Use(middleware.Decompress())         // strictly before body limit
 	e.Use(middleware.BodyLimit(5_242_880)) // 5 Mb, avoiding OOM killer
 
+	authMiddleware := my_middleware.Authenticator(&jwtData, log)
+
 	// Routes
 
-	routes.Setup(e, h)
+	routes.Setup(e, h, authMiddleware)
 
 	// Graceful shutdown
 
@@ -102,7 +113,6 @@ func run(log *zerolog.Logger) error {
 	return sc.Start(ctx, e)
 }
 
-/* -------------------------------------------------------------------------- */
 func main() {
 	log := logger.New()
 

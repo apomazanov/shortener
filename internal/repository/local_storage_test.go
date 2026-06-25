@@ -46,7 +46,7 @@ func TestFileRepo(t *testing.T) {
 		original := "http://example.com"
 		ctx := context.Background()
 
-		res, err := repo.Save(ctx, alias, original)
+		res, err := repo.Save(ctx, alias, original, userID)
 		assert.NoError(t, err)
 		assert.Equal(t, alias, res)
 
@@ -65,10 +65,10 @@ func TestFileRepo(t *testing.T) {
 		original := "http://example.com"
 		ctx := context.Background()
 
-		_, err = repo.Save(ctx, alias, original)
+		_, err = repo.Save(ctx, alias, original, userID)
 		require.NoError(t, err)
 
-		_, err = repo.Save(ctx, alias, "http://another.com")
+		_, err = repo.Save(ctx, alias, "http://another.com", userID)
 		assert.ErrorIs(t, err, domain.ErrAliasDuplicate)
 	})
 
@@ -83,13 +83,13 @@ func TestFileRepo(t *testing.T) {
 		ctx := context.Background()
 
 		// First save
-		res1, err := repo.Save(ctx, alias1, original)
+		res1, err := repo.Save(ctx, alias1, original, userID)
 		require.NoError(t, err)
 		assert.Equal(t, alias1, res1)
 
 		// Second save with same URL but different suggested alias
 		alias2 := "alias2"
-		res2, err := repo.Save(ctx, alias2, original)
+		res2, err := repo.Save(ctx, alias2, original, userID)
 		assert.ErrorIs(t, err, domain.ErrOriginalURLDuplicate)
 		// Should return the first alias instead of error or new entry
 		assert.Equal(t, alias1, res2)
@@ -104,7 +104,7 @@ func TestFileRepo(t *testing.T) {
 		// First instance: Save data
 		repo1, err := NewLocalStorage(&mockRepoConfig{file: testFile}, &logger)
 		require.NoError(t, err)
-		_, err = repo1.Save(ctx, alias, original)
+		_, err = repo1.Save(ctx, alias, original, userID)
 		require.NoError(t, err)
 
 		// Second instance: Load data from the same file
@@ -128,12 +128,12 @@ func TestFileRepo(t *testing.T) {
 		ctx := context.Background()
 
 		// Save first entry
-		_, err = repo.Save(ctx, "alias1", "http://url1.com")
+		_, err = repo.Save(ctx, "alias1", "http://url1.com", userID)
 		require.NoError(t, err)
 		assert.Equal(t, 1, repo.lastUUID, "lastUUID should be 1 after first save")
 
 		// Save second entry
-		_, err = repo.Save(ctx, "alias2", "http://url2.com")
+		_, err = repo.Save(ctx, "alias2", "http://url2.com", userID)
 		require.NoError(t, err)
 		assert.Equal(t, 2, repo.lastUUID, "lastUUID should be 2 after second save")
 

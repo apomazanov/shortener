@@ -40,7 +40,6 @@ type PostgresStorage struct {
 	pool pgxPooler
 }
 
-/* -------------------------------------------------------------------------- */
 func runMigrations(ctx context.Context, dsn string) error {
 
 	goose.SetBaseFS(migrations.EmbedFS)
@@ -64,7 +63,6 @@ func runMigrations(ctx context.Context, dsn string) error {
 	return nil
 }
 
-/* -------------------------------------------------------------------------- */
 func NewPostgresStorage(cfg PostgresConfig) (*PostgresStorage, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -102,8 +100,13 @@ func NewPostgresStorage(cfg PostgresConfig) (*PostgresStorage, error) {
 	return &PostgresStorage{pool: pool}, nil
 }
 
-/* -------------------------------------------------------------------------- */
-func (r *PostgresStorage) Save(ctx context.Context, alias string, original string) (writtenAlias string, err error) {
+func (r *PostgresStorage) Save(
+	ctx context.Context,
+	alias string,
+	original string,
+	userID string,
+) (writtenAlias string, err error) {
+
 	if err := ctx.Err(); err != nil {
 		return "", fmt.Errorf("repo: save aborted: %w", err)
 	}
@@ -115,15 +118,15 @@ func (r *PostgresStorage) Save(ctx context.Context, alias string, original strin
 	// creating query
 
 	query := `
-		INSERT INTO urls (alias, original)
-		VALUES ($1, $2)
+		INSERT INTO urls (alias, original, user_id)
+		VALUES ($1, $2, $3)
 		ON CONFLICT (original) DO UPDATE SET original = EXCLUDED.original
 		RETURNING alias;
 	`
 
 	// executing
 
-	err = r.pool.QueryRow(queryCtx, query, alias, original).Scan(&writtenAlias)
+	err = r.pool.QueryRow(queryCtx, query, alias, original, userID).Scan(&writtenAlias)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -143,8 +146,11 @@ func (r *PostgresStorage) Save(ctx context.Context, alias string, original strin
 	return writtenAlias, nil
 }
 
-/* -------------------------------------------------------------------------- */
-func (r *PostgresStorage) SaveBatch(ctx context.Context, toWrite map[string]string) (written map[string]string, err error) {
+func (r *PostgresStorage) SaveBatch(
+	ctx context.Context,
+	toWrite map[string]string,
+	userID string,
+) (written map[string]string, err error) {
 
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("repo: batch save aborted: %w", err)
@@ -163,10 +169,10 @@ func (r *PostgresStorage) SaveBatch(ctx context.Context, toWrite map[string]stri
 	builder := squirrel.StatementBuilder.
 		PlaceholderFormat(squirrel.Dollar).
 		Insert("urls").
-		Columns("alias", "original")
+		Columns("alias", "original", "user_id")
 
 	for original, alias := range toWrite {
-		builder = builder.Values(alias, original)
+		builder = builder.Values(alias, original, userID)
 	}
 
 	builder = builder.Suffix("ON CONFLICT (original) DO UPDATE SET original = EXCLUDED.original RETURNING alias, original")
@@ -224,7 +230,6 @@ func (r *PostgresStorage) SaveBatch(ctx context.Context, toWrite map[string]stri
 
 }
 
-/* -------------------------------------------------------------------------- */
 func (r *PostgresStorage) Get(ctx context.Context, alias string) (original string, err error) {
 	if err := ctx.Err(); err != nil {
 		return "", fmt.Errorf("repo: get aborted: %w", err)
@@ -234,8 +239,8 @@ func (r *PostgresStorage) Get(ctx context.Context, alias string) (original strin
 	defer cancel()
 
 	query := `
-		SELECT original 
-		FROM urls 
+		SELECT original
+		FROM urls
 		WHERE alias = $1;
 	`
 
@@ -250,13 +255,52 @@ func (r *PostgresStorage) Get(ctx context.Context, alias string) (original strin
 	return original, nil
 }
 
-/* -------------------------------------------------------------------------- */
+func (r *PostgresStorage) GetByUser(ctx context.Context, userID string) (data map[string]string, err error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("repo: get aborted: %w", err)
+	}
+
+	queryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	query := `
+		SELECT alias, original
+		FROM urls
+		WHERE user_id = $1;
+	`
+
+	rows, err := r.pool.Query(queryCtx, query, userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("repo: database error: %w", err)
+	}
+	defer rows.Close()
+
+	data = make(map[string]string)
+	for rows.Next() {
+		var k, v string
+
+		err := rows.Scan(&k, &v)
+		if err != nil {
+			return nil, fmt.Errorf("repo: database error: %w", err)
+		}
+
+		data[k] = v
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repo: database error: %w", err)
+	}
+
+	return data, nil
+}
+
 func (r *PostgresStorage) Close() error {
 	r.pool.Close()
 	return nil
 }
 
-/* -------------------------------------------------------------------------- */
 func (r *PostgresStorage) Ping(ctx context.Context) error {
 	return r.pool.Ping(ctx)
 }

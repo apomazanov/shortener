@@ -34,7 +34,6 @@ type entry struct {
 	Original string `json:"original"`
 }
 
-/* -------------------------------------------------------------------------- */
 func NewLocalStorage(cfg LocalStorageConfig, log *zerolog.Logger) (*LocalStorage, error) {
 
 	storage := &LocalStorage{cache: make(map[string]string)}
@@ -88,7 +87,6 @@ func NewLocalStorage(cfg LocalStorageConfig, log *zerolog.Logger) (*LocalStorage
 	return storage, nil
 }
 
-/* -------------------------------------------------------------------------- */
 func (r *LocalStorage) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -107,8 +105,12 @@ func (r *LocalStorage) Close() error {
 	return nil
 }
 
-/* -------------------------------------------------------------------------- */
-func (r *LocalStorage) Save(ctx context.Context, alias string, original string) (usedAlias string, err error) {
+func (r *LocalStorage) Save(
+	ctx context.Context,
+	alias string,
+	original string,
+	userID string,
+) (usedAlias string, err error) {
 	if err := ctx.Err(); err != nil {
 		return "", fmt.Errorf("repo: save aborted: %w", err)
 	}
@@ -148,8 +150,11 @@ func (r *LocalStorage) Save(ctx context.Context, alias string, original string) 
 	return alias, nil
 }
 
-/* -------------------------------------------------------------------------- */
-func (r *LocalStorage) SaveBatch(ctx context.Context, toWrite map[string]string) (written map[string]string, err error) {
+func (r *LocalStorage) SaveBatch(
+	ctx context.Context,
+	toWrite map[string]string,
+	userID string,
+) (written map[string]string, err error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("repo: batch save aborted: %w", err)
 	}
@@ -223,7 +228,6 @@ MainLoop:
 	return written, nil
 }
 
-/* -------------------------------------------------------------------------- */
 func (r *LocalStorage) Get(ctx context.Context, alias string) (original string, err error) {
 	if err := ctx.Err(); err != nil {
 		return "", fmt.Errorf("repo: get aborted: %w", err)
@@ -240,7 +244,10 @@ func (r *LocalStorage) Get(ctx context.Context, alias string) (original string, 
 	return "", domain.ErrNotFound
 }
 
-/* -------------------------------------------------------------------------- */
+func (r *LocalStorage) GetByUser(ctx context.Context, userID string) (data map[string]string, err error) {
+	return nil, domain.ErrNotFound
+}
+
 func (r *LocalStorage) Ping(ctx context.Context) error {
 	return nil
 }

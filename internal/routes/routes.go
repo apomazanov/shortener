@@ -6,12 +6,13 @@ import (
 )
 
 /* -------------------------------------------------------------------------- */
-func Setup(e *echo.Echo, userHandler *handlers.Handler) {
+func Setup(e *echo.Echo, h *handlers.Handler, authMiddleware echo.MiddlewareFunc) {
 
-	e.GET("/:alias", userHandler.Get)
-	e.GET("/ping", userHandler.Ping)
-	e.POST("/", userHandler.CreateText)
-	e.POST("/api/shorten", userHandler.CreateJson)
-	e.POST("/api/shorten/batch", userHandler.CreateJsonBatch)
-	e.RouteNotFound("/*", userHandler.Reject)
+	e.GET("/:alias", h.Get)
+	e.GET("/ping", h.Ping)
+	e.GET("/api/user/urls", h.GetUserURLs, authMiddleware)
+	e.POST("/", h.CreateText, authMiddleware)
+	e.POST("/api/shorten", h.CreateJson, authMiddleware)
+	e.POST("/api/shorten/batch", h.CreateJsonBatch, authMiddleware)
+	e.RouteNotFound("/*", h.Reject)
 }

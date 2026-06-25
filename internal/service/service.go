@@ -10,24 +10,24 @@ import (
 	"github.com/apomazanov/shortener/internal/domain"
 )
 
+//go:generate mockgen -destination=mocks/mock_repo.go -package=mocks github.com/apomazanov/shortener/internal/service Repo
 type Repo interface {
-	Save(ctx context.Context, alias string, original string) (usedAlias string, err error)
-	SaveBatch(ctx context.Context, toWrite map[string]string) (written map[string]string, err error)
+	Save(ctx context.Context, alias string, original string, userID string) (usedAlias string, err error)
+	SaveBatch(ctx context.Context, toWrite map[string]string, userID string) (written map[string]string, err error)
 	Get(ctx context.Context, alias string) (original string, err error)
+	GetByUser(ctx context.Context, userID string) (data map[string]string, err error)
 }
 
 type Service struct {
 	repo Repo
 }
 
-/* -------------------------------------------------------------------------- */
 func New(repo Repo) *Service {
 	return &Service{
 		repo: repo,
 	}
 }
 
-/* -------------------------------------------------------------------------- */
 func (s *Service) newAlias() string {
 
 	const (
@@ -46,7 +46,6 @@ func (s *Service) newAlias() string {
 	return alias.String()
 }
 
-/* -------------------------------------------------------------------------- */
 func (s *Service) GetOriginalURL(ctx context.Context, alias string) (original string, err error) {
 	original, err = s.repo.Get(ctx, alias)
 
@@ -57,14 +56,23 @@ func (s *Service) GetOriginalURL(ctx context.Context, alias string) (original st
 	return original, err
 }
 
-/* -------------------------------------------------------------------------- */
-func (s *Service) CreateURLAlias(ctx context.Context, original string) (alias string, err error) {
+func (s *Service) GetUserURLs(ctx context.Context, userID string) (data map[string]string, err error) {
+	data, err = s.repo.GetByUser(ctx, userID)
+
+	if err != nil {
+		return nil, fmt.Errorf("service: cannot get user's URLs: %w", err)
+	}
+
+	return data, err
+}
+
+func (s *Service) CreateURLAlias(ctx context.Context, original string, userID string) (alias string, err error) {
 	const maxRetries = 5
 
 	for range maxRetries {
 		newAlias := s.newAlias()
 
-		alias, err = s.repo.Save(ctx, newAlias, original)
+		alias, err = s.repo.Save(ctx, newAlias, original, userID)
 
 		if err == nil || errors.Is(err, domain.ErrOriginalURLDuplicate) {
 			return alias, err
@@ -82,8 +90,7 @@ func (s *Service) CreateURLAlias(ctx context.Context, original string) (alias st
 	return "", fmt.Errorf("service: alias gen retry limit exceeded: %w", domain.ErrSaveRetryLimitExceeded)
 }
 
-/* -------------------------------------------------------------------------- */
-func (s *Service) CreateURLAliasBatch(ctx context.Context, originals []string) (writtenData map[string]string, err error) {
+func (s *Service) CreateURLAliasBatch(ctx context.Context, originals []string, userID string) (writtenData map[string]string, err error) {
 	const maxRetries = 5
 
 	// original -> alias
@@ -96,7 +103,7 @@ func (s *Service) CreateURLAliasBatch(ctx context.Context, originals []string) (
 			dataToWrite[original] = alias
 		}
 
-		writtenData, err := s.repo.SaveBatch(ctx, dataToWrite)
+		writtenData, err := s.repo.SaveBatch(ctx, dataToWrite, userID)
 
 		if err == nil || errors.Is(err, domain.ErrOriginalURLDuplicate) {
 			return writtenData, err
