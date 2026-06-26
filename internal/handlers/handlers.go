@@ -65,8 +65,8 @@ type jsonBatchResponseItem struct {
 }
 
 type jsonGetUserURLsResponseItem struct {
-	Alias    string `json:"short_url"`
-	Original string `json:"original_url"`
+	ShortURL    string `json:"short_url"`
+	OriginalURL string `json:"original_url"`
 }
 
 func New(b BusinessService, c URLConfig, l *zerolog.Logger, h HealthService, j JWT) *Handler {
@@ -159,8 +159,8 @@ func (h *Handler) GetUserURLs(c *echo.Context) error {
 
 	for k, v := range data {
 		responseData = append(responseData, jsonGetUserURLsResponseItem{
-			Alias:    k,
-			Original: v,
+			ShortURL:    h.cfg.GetURLBase() + "/" + k,
+			OriginalURL: v,
 		})
 	}
 

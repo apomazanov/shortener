@@ -243,13 +243,10 @@ func TestHandler_Ping(t *testing.T) {
 }
 
 func TestHandler_GetUserURLs(t *testing.T) {
-
 	const (
 		validUserID   = "123e4567-e89b-42d3-a456-426614174000"
 		invalidUserID = "super puper root user"
-		validURL      = "http://example.com/original"
 		baseURL       = "http://shortener"
-		alias         = "abcdef"
 	)
 
 	tests := []struct {
@@ -271,17 +268,22 @@ func TestHandler_GetUserURLs(t *testing.T) {
 						"alias2": "original2",
 					}, nil).
 					Times(1)
+
+				m.config.EXPECT().
+					GetURLBase().
+					Return(baseURL).
+					Times(2)
 			},
 			expectedErr:    nil,
 			expectedStatus: http.StatusOK,
 			expectedResponse: []jsonGetUserURLsResponseItem{
 				{
-					Alias:    "alias1",
-					Original: "original1",
+					ShortURL:    baseURL + "/alias1",
+					OriginalURL: "original1",
 				},
 				{
-					Alias:    "alias2",
-					Original: "original2",
+					ShortURL:    baseURL + "/alias2",
+					OriginalURL: "original2",
 				},
 			},
 		},
@@ -335,7 +337,6 @@ func TestHandler_GetUserURLs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// tcx := createCtxGet(t, "dummyPath", tt.userID)
 			tcx := createCtx(t, &ctxOptions{
 				method: http.MethodGet,
 				userID: tt.userID,
