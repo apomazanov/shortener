@@ -79,6 +79,7 @@ func createCtx(t *testing.T, opts *ctxOptions) *testContext {
 
 	if opts.userID != nil {
 		ctx.Set("user-id", opts.userID)
+		ctx.Set("cookie-exists", true)
 	}
 
 	return &testContext{e: e, ctx: ctx, res: res}
@@ -288,7 +289,7 @@ func TestHandler_GetUserURLs(t *testing.T) {
 			},
 		},
 		{
-			name:   "user-id invalid",
+			name:   "cookie invalid",
 			userID: invalidUserID,
 			mocksSetup: func(m *mocksContainer) {
 				m.service.EXPECT().
@@ -297,6 +298,24 @@ func TestHandler_GetUserURLs(t *testing.T) {
 			},
 			expectedErr:    echo.ErrUnauthorized,
 			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name:   "user-id missing",
+			userID: nil,
+			mocksSetup: func(m *mocksContainer) {
+				m.service.EXPECT().
+					GetUserURLs(gomock.Any(), gomock.Any()).
+					Times(0)
+				m.jwt.EXPECT().
+					CreateCookieWithUserID(gomock.Any()).
+					Return(&http.Cookie{
+						Name:  "user-id",
+						Value: validUserID,
+					}, nil).
+					Times(1)
+			},
+			expectedErr:    nil,
+			expectedStatus: http.StatusNoContent,
 		},
 		{
 			name:   "user-id extraction error",

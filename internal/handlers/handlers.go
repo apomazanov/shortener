@@ -128,6 +128,28 @@ func (h *Handler) GetUserURLs(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	// User ID
+	cookieExists, ok := extractCookieExistsFromCtx(c)
+	if !ok {
+		log.Error().
+			Msg("Failed extracting cookie-exists from context")
+
+		return echo.ErrInternalServerError
+	}
+
+	if !cookieExists {
+		// Cookie created for new users (user-id missing)
+		newCookie, err := h.JWT.CreateCookieWithUserID(newUUIDString())
+		if err != nil {
+			log.Error().
+				Err(err).
+				Msg("cookie creation failed")
+			return echo.ErrInternalServerError
+		}
+
+		c.SetCookie(newCookie)
+		return c.NoContent(http.StatusNoContent)
+	}
+
 	ctxUserID, ok := extractUserIDFromCtx(c)
 	if !ok {
 		log.Error().
@@ -136,6 +158,7 @@ func (h *Handler) GetUserURLs(c *echo.Context) error {
 		return echo.ErrInternalServerError
 	}
 
+	// Invalid user-id leads to auth failure
 	if _, err := uuid.Parse(ctxUserID); err != nil {
 		return echo.ErrUnauthorized
 	}
@@ -467,6 +490,19 @@ func extractUserIDFromCtx(c *echo.Context) (userID string, ok bool) {
 
 	userID, ok = userIDAny.(string)
 	return userID, ok
+}
+
+func extractCookieExistsFromCtx(c *echo.Context) (exists bool, ok bool) {
+
+	existsAny := c.Get("cookie-exists")
+
+	if existsAny == nil {
+		// missing
+		return false, true
+	}
+
+	exists, ok = existsAny.(bool)
+	return exists, ok
 }
 
 func newUUIDString() string {

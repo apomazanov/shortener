@@ -20,8 +20,10 @@ func Authenticator(jwtData *my_jwt.Data, log *zerolog.Logger) echo.MiddlewareFun
 			cookieExists := (err == nil)
 
 			if !cookieExists {
+				c.Set("cookie-exists", false)
 				return next(c)
 			}
+			c.Set("cookie-exists", true)
 
 			// parsing token
 
