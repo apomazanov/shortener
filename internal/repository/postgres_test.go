@@ -234,9 +234,9 @@ func TestPostgresStorage_Get(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		tcx := createPostgresTestContext(t)
 
-		tcx.mock.ExpectQuery("(?s)SELECT original\\s+FROM urls\\s+WHERE alias = \\$1").
+		tcx.mock.ExpectQuery("(?s)SELECT original, is_deleted\\s+FROM urls\\s+WHERE alias = \\$1").
 			WithArgs(alias).
-			WillReturnRows(pgxmock.NewRows([]string{"original"}).AddRow(original))
+			WillReturnRows(pgxmock.NewRows([]string{"original", "is_deleted"}).AddRow(original, false))
 
 		res, err := tcx.repo.Get(context.Background(), alias)
 
@@ -245,10 +245,24 @@ func TestPostgresStorage_Get(t *testing.T) {
 		assert.NoError(t, tcx.mock.ExpectationsWereMet())
 	})
 
+	t.Run("deleted", func(t *testing.T) {
+		tcx := createPostgresTestContext(t)
+
+		tcx.mock.ExpectQuery("(?s)SELECT original, is_deleted\\s+FROM urls\\s+WHERE alias = \\$1").
+			WithArgs(alias).
+			WillReturnRows(pgxmock.NewRows([]string{"original", "is_deleted"}).AddRow(original, true))
+
+		res, err := tcx.repo.Get(context.Background(), alias)
+
+		require.ErrorIs(t, err, domain.ErrFoundDeleted)
+		assert.Empty(t, res)
+		assert.NoError(t, tcx.mock.ExpectationsWereMet())
+	})
+
 	t.Run("not found", func(t *testing.T) {
 		tcx := createPostgresTestContext(t)
 
-		tcx.mock.ExpectQuery("(?s)SELECT original\\s+FROM urls\\s+WHERE alias = \\$1").
+		tcx.mock.ExpectQuery("(?s)SELECT original, is_deleted\\s+FROM urls\\s+WHERE alias = \\$1").
 			WithArgs(alias).
 			WillReturnError(pgx.ErrNoRows)
 
@@ -262,7 +276,7 @@ func TestPostgresStorage_Get(t *testing.T) {
 	t.Run("query error", func(t *testing.T) {
 		tcx := createPostgresTestContext(t)
 
-		tcx.mock.ExpectQuery("(?s)SELECT original\\s+FROM urls\\s+WHERE alias = \\$1").
+		tcx.mock.ExpectQuery("(?s)SELECT original, is_deleted\\s+FROM urls\\s+WHERE alias = \\$1").
 			WithArgs(alias).
 			WillReturnError(errors.New("scan error"))
 
@@ -293,11 +307,11 @@ func TestPostgresStorage_GetByUser(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		tcx := createPostgresTestContext(t)
 
-		tcx.mock.ExpectQuery("(?s)SELECT alias, original\\s+FROM urls\\s+WHERE user_id = \\$1").
+		tcx.mock.ExpectQuery("(?s)SELECT alias, original, is_deleted\\s+FROM urls\\s+WHERE user_id = \\$1").
 			WithArgs(userID).
-			WillReturnRows(pgxmock.NewRows([]string{"alias", "original"}).
-				AddRow("a1", "http://u1.com").
-				AddRow("a2", "http://u2.com"))
+			WillReturnRows(pgxmock.NewRows([]string{"alias", "original", "is_deleted"}).
+				AddRow("a1", "http://u1.com", false).
+				AddRow("a2", "http://u2.com", false))
 
 		res, err := tcx.repo.GetByUser(context.Background(), userID)
 
@@ -312,9 +326,9 @@ func TestPostgresStorage_GetByUser(t *testing.T) {
 	t.Run("empty result", func(t *testing.T) {
 		tcx := createPostgresTestContext(t)
 
-		tcx.mock.ExpectQuery("(?s)SELECT alias, original\\s+FROM urls\\s+WHERE user_id = \\$1").
+		tcx.mock.ExpectQuery("(?s)SELECT alias, original, is_deleted\\s+FROM urls\\s+WHERE user_id = \\$1").
 			WithArgs(userID).
-			WillReturnRows(pgxmock.NewRows([]string{"alias", "original"}))
+			WillReturnRows(pgxmock.NewRows([]string{"alias", "original", "is_deleted"}))
 
 		res, err := tcx.repo.GetByUser(context.Background(), userID)
 
@@ -323,10 +337,30 @@ func TestPostgresStorage_GetByUser(t *testing.T) {
 		assert.NoError(t, tcx.mock.ExpectationsWereMet())
 	})
 
+	t.Run("deleted items are filtered", func(t *testing.T) {
+		tcx := createPostgresTestContext(t)
+
+		tcx.mock.ExpectQuery("(?s)SELECT alias, original, is_deleted\\s+FROM urls\\s+WHERE user_id = \\$1").
+			WithArgs(userID).
+			WillReturnRows(pgxmock.NewRows([]string{"alias", "original", "is_deleted"}).
+				AddRow("a1", "http://u1.com", false).
+				AddRow("a2", "http://u2.com", true). // This one should be filtered out
+				AddRow("a3", "http://u3.com", false))
+
+		res, err := tcx.repo.GetByUser(context.Background(), userID)
+
+		require.NoError(t, err)
+		assert.Equal(t, map[string]string{
+			"a1": "http://u1.com",
+			"a3": "http://u3.com",
+		}, res)
+		assert.NoError(t, tcx.mock.ExpectationsWereMet())
+	})
+
 	t.Run("query error", func(t *testing.T) {
 		tcx := createPostgresTestContext(t)
 
-		tcx.mock.ExpectQuery("(?s)SELECT alias, original\\s+FROM urls\\s+WHERE user_id = \\$1").
+		tcx.mock.ExpectQuery("(?s)SELECT alias, original, is_deleted\\s+FROM urls\\s+WHERE user_id = \\$1").
 			WithArgs(userID).
 			WillReturnError(errors.New("db fail"))
 
@@ -340,7 +374,7 @@ func TestPostgresStorage_GetByUser(t *testing.T) {
 	t.Run("rows error", func(t *testing.T) {
 		tcx := createPostgresTestContext(t)
 
-		tcx.mock.ExpectQuery("(?s)SELECT alias, original\\s+FROM urls\\s+WHERE user_id = \\$1").
+		tcx.mock.ExpectQuery("(?s)SELECT alias, original, is_deleted\\s+FROM urls\\s+WHERE user_id = \\$1").
 			WithArgs(userID).
 			WillReturnRows(pgxmock.NewRows([]string{"alias", "original"}).
 				AddRow("a1", "http://u1.com").

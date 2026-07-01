@@ -239,17 +239,22 @@ func (r *PostgresStorage) Get(ctx context.Context, alias string) (original strin
 	defer cancel()
 
 	query := `
-		SELECT original
+		SELECT original, is_deleted
 		FROM urls
 		WHERE alias = $1;
 	`
+	var is_deleted bool
 
-	err = r.pool.QueryRow(queryCtx, query, alias).Scan(&original)
+	err = r.pool.QueryRow(queryCtx, query, alias).Scan(&original, &is_deleted)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", domain.ErrNotFound
 		}
 		return "", fmt.Errorf("repo: database error: %w", err)
+	}
+
+	if is_deleted {
+		return "", domain.ErrFoundDeleted
 	}
 
 	return original, nil
@@ -264,7 +269,7 @@ func (r *PostgresStorage) GetByUser(ctx context.Context, userID string) (data ma
 	defer cancel()
 
 	query := `
-		SELECT alias, original
+		SELECT alias, original, is_deleted
 		FROM urls
 		WHERE user_id = $1;
 	`
@@ -281,13 +286,16 @@ func (r *PostgresStorage) GetByUser(ctx context.Context, userID string) (data ma
 	data = make(map[string]string)
 	for rows.Next() {
 		var k, v string
+		var is_deleted bool
 
-		err := rows.Scan(&k, &v)
+		err := rows.Scan(&k, &v, &is_deleted)
 		if err != nil {
 			return nil, fmt.Errorf("repo: database error: %w", err)
 		}
 
-		data[k] = v
+		if !is_deleted {
+			data[k] = v
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("repo: database error: %w", err)
