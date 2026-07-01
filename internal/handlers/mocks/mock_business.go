@@ -70,6 +70,20 @@ func (mr *MockBusinessServiceMockRecorder) CreateURLAliasBatch(ctx, originals, u
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateURLAliasBatch", reflect.TypeOf((*MockBusinessService)(nil).CreateURLAliasBatch), ctx, originals, userID)
 }
 
+// DeleteUserURLs mocks base method.
+func (m *MockBusinessService) DeleteUserURLs(ctx context.Context, userID string, aliases []string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteUserURLs", ctx, userID, aliases)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteUserURLs indicates an expected call of DeleteUserURLs.
+func (mr *MockBusinessServiceMockRecorder) DeleteUserURLs(ctx, userID, aliases any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUserURLs", reflect.TypeOf((*MockBusinessService)(nil).DeleteUserURLs), ctx, userID, aliases)
+}
+
 // GetOriginalURL mocks base method.
 func (m *MockBusinessService) GetOriginalURL(ctx context.Context, alias string) (string, error) {
 	m.ctrl.T.Helper()

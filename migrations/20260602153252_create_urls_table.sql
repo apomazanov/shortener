@@ -6,7 +6,5 @@ CREATE TABLE urls (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_urls_unique_alias ON urls (alias);
-
 -- +goose Down
 DROP TABLE IF EXISTS urls;

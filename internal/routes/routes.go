@@ -14,5 +14,6 @@ func Setup(e *echo.Echo, h *handlers.Handler, authMiddleware echo.MiddlewareFunc
 	e.POST("/", h.CreateText, authMiddleware)
 	e.POST("/api/shorten", h.CreateJson, authMiddleware)
 	e.POST("/api/shorten/batch", h.CreateJsonBatch, authMiddleware)
+	e.DELETE("/api/user/urls", h.DeleteUserURLsByAlias, authMiddleware)
 	e.RouteNotFound("/*", h.Reject)
 }

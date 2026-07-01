@@ -1,5 +1,5 @@
 -- +goose Up
-CREATE UNIQUE INDEX idx_urls_unique_original ON urls(original);
+ALTER TABLE urls ADD CONSTRAINT urls_unique_original UNIQUE (original)
 
 -- +goose Down
-DROP INDEX IF EXISTS idx_urls_unique_original;
+ALTER TABLE urls DROP CONSTRAINT IF EXISTS urls_unique_original;

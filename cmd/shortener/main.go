@@ -77,7 +77,11 @@ func run(log *zerolog.Logger) error {
 
 	// Service and handlers
 
-	s := service.New(r)
+	s := service.New(r, &service.AsyncDeleterConfig{
+		BatchSize: 10,
+		Timeout:   time.Second * 3,
+	}, log)
+
 	h := handlers.New(s, cfg, log, r, &jwtData)
 
 	e := echo.New()

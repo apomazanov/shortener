@@ -251,3 +251,7 @@ func (r *LocalStorage) GetByUser(ctx context.Context, userID string) (data map[s
 func (r *LocalStorage) Ping(ctx context.Context) error {
 	return nil
 }
+
+func (r *LocalStorage) DeleteBatch(ctx context.Context, batch map[string][]string) error {
+	return nil
+}

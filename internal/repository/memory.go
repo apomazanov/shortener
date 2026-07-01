@@ -135,3 +135,7 @@ func (r *MemStorage) Close() error {
 func (r *MemStorage) Ping(ctx context.Context) error {
 	return nil
 }
+
+func (r *MemStorage) DeleteBatch(ctx context.Context, batch map[string][]string) error {
+	return nil
+}

@@ -36,6 +36,7 @@ func TestSetup(t *testing.T) {
 		{method: "POST", path: "/"},
 		{method: "POST", path: "/api/shorten"},
 		{method: "POST", path: "/api/shorten/batch"},
+		{method: "DELETE", path: "/api/user/urls"},
 	}
 
 	// Assert that each expected endpoint is correctly registered

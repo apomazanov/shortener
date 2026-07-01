@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -25,7 +27,16 @@ func createServiceTestContext(t *testing.T) *serviceTestContext {
 	ctrl := gomock.NewController(t)
 
 	repo := mocks.NewMockRepo(ctrl)
-	service := New(repo)
+	deleterCfg := AsyncDeleterConfig{
+		BatchSize: 1,
+		Timeout:   time.Minute,
+	}
+	logger := zerolog.Nop()
+	service := New(repo, &deleterCfg, &logger)
+
+	t.Cleanup(func() {
+		close(service.deleter.chTasks)
+	})
 
 	return &serviceTestContext{
 		ctx:     context.Background(),
@@ -439,4 +450,42 @@ func TestService_CreateURLAliasBatch(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestService_DeleteUserURLs(t *testing.T) {
+	const userID = "123e4567-e89b-42d3-a456-426614174000"
+
+	aliases := []string{
+		"alias1",
+		"alias2",
+	}
+
+	t.Run("success", func(t *testing.T) {
+		tcx := createServiceTestContext(t)
+
+		called := make(chan map[string][]string, 1)
+
+		tcx.repo.EXPECT().
+			DeleteBatch(gomock.Any(), map[string][]string{
+				userID: aliases,
+			}).
+			DoAndReturn(func(ctx context.Context, batch map[string][]string) error {
+				called <- batch
+				return nil
+			}).
+			Times(1)
+
+		err := tcx.service.DeleteUserURLs(tcx.ctx, userID, aliases)
+
+		require.NoError(t, err)
+
+		select {
+		case batch := <-called:
+			require.Contains(t, batch, userID)
+			assert.ElementsMatch(t, aliases, batch[userID])
+
+		case <-time.After(200 * time.Millisecond):
+			t.Fatal("expected DeleteBatch to be called")
+		}
+	})
 }

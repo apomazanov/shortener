@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/apomazanov/shortener/internal/domain"
+	"github.com/rs/zerolog"
 )
 
 //go:generate mockgen -destination=mocks/mock_repo.go -package=mocks github.com/apomazanov/shortener/internal/service Repo
@@ -16,15 +17,18 @@ type Repo interface {
 	SaveBatch(ctx context.Context, toWrite map[string]string, userID string) (written map[string]string, err error)
 	Get(ctx context.Context, alias string) (original string, err error)
 	GetByUser(ctx context.Context, userID string) (data map[string]string, err error)
+	DeleteBatch(ctx context.Context, batch map[string][]string) error
 }
 
 type Service struct {
-	repo Repo
+	repo    Repo
+	deleter *asyncDeleter
 }
 
-func New(repo Repo) *Service {
+func New(repo Repo, asyncDeleterCfg *AsyncDeleterConfig, log *zerolog.Logger) *Service {
 	return &Service{
-		repo: repo,
+		repo:    repo,
+		deleter: newAsyncDeleter(repo, asyncDeleterCfg, log),
 	}
 }
 
@@ -120,4 +124,10 @@ func (s *Service) CreateURLAliasBatch(ctx context.Context, originals []string, u
 	}
 
 	return nil, fmt.Errorf("service: batch of aliases gen retry limit exceeded: %w", domain.ErrSaveRetryLimitExceeded)
+}
+
+func (s *Service) DeleteUserURLs(ctx context.Context, userID string, aliases []string) error {
+	// ctx will be cancelled after response, not transiting it further
+	s.deleter.Enqueue(userID, aliases)
+	return nil
 }

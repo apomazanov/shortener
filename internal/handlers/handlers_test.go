@@ -1181,3 +1181,139 @@ func TestHandler_Reject(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, tcx.res.Code)
 }
+
+func TestHandler_DeleteUserURLsByAlias(t *testing.T) {
+	const (
+		validUserID   = "123e4567-e89b-42d3-a456-426614174000"
+		invalidUserID = "not-a-valid-uuid"
+		baseURL       = "http://shortener"
+		alias1        = "alias1"
+		alias2        = "alias2"
+	)
+
+	validBody := `["` + alias1 + `", "` + alias2 + `"]`
+
+	tests := []struct {
+		name              string
+		userID            any
+		body              string
+		mocksSetup        func(m *mocksContainer)
+		expectedErr       error
+		expectedStatus    int
+		expectedSetCookie bool
+	}{
+		{
+			name:   "success",
+			userID: validUserID,
+			body:   validBody,
+			mocksSetup: func(m *mocksContainer) {
+				m.service.EXPECT().
+					DeleteUserURLs(gomock.Any(), validUserID, []string{alias1, alias2}).
+					Return(nil).
+					Times(1)
+			},
+			expectedErr:       nil,
+			expectedStatus:    http.StatusAccepted,
+			expectedSetCookie: false,
+		},
+		{
+			name:   "unauthorized without cookie",
+			userID: nil,
+			body:   validBody,
+			mocksSetup: func(m *mocksContainer) {
+				m.service.EXPECT().
+					DeleteUserURLs(gomock.Any(), gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			expectedErr:       echo.ErrUnauthorized,
+			expectedStatus:    http.StatusUnauthorized,
+			expectedSetCookie: false,
+		},
+		{
+			name:   "user-id invalid uuid, unauthorized",
+			userID: invalidUserID,
+			body:   validBody,
+			mocksSetup: func(m *mocksContainer) {
+				m.service.EXPECT().
+					DeleteUserURLs(gomock.Any(), gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			expectedErr:       echo.ErrUnauthorized,
+			expectedStatus:    http.StatusUnauthorized,
+			expectedSetCookie: false,
+		},
+		{
+			name:   "empty request data",
+			userID: validUserID,
+			body:   "",
+			mocksSetup: func(m *mocksContainer) {
+				m.service.EXPECT().
+					DeleteUserURLs(gomock.Any(), gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			expectedErr:       echo.ErrBadRequest,
+			expectedStatus:    http.StatusBadRequest,
+			expectedSetCookie: false,
+		},
+		{
+			name:   "invalid alias size",
+			userID: validUserID,
+			body:   `["123", "456"]`,
+			mocksSetup: func(m *mocksContainer) {
+				m.service.EXPECT().
+					DeleteUserURLs(gomock.Any(), gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			expectedErr:       echo.ErrBadRequest,
+			expectedStatus:    http.StatusBadRequest,
+			expectedSetCookie: false,
+		},
+		{
+			name:   "service internal error",
+			userID: validUserID,
+			body:   validBody,
+			mocksSetup: func(m *mocksContainer) {
+				m.service.EXPECT().
+					DeleteUserURLs(gomock.Any(), validUserID, []string{alias1, alias2}).
+					Return(errors.New("internal service error")).
+					Times(1)
+			},
+			expectedErr:       echo.ErrInternalServerError,
+			expectedStatus:    http.StatusInternalServerError,
+			expectedSetCookie: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tcx := createCtx(t, &ctxOptions{
+				method:      http.MethodPost,
+				userID:      tt.userID,
+				body:        tt.body,
+				contentType: echo.MIMEApplicationJSON,
+			})
+
+			m, h := createMocksAndHandler(t)
+
+			if tt.mocksSetup != nil {
+				tt.mocksSetup(m)
+			}
+
+			err := h.DeleteUserURLsByAlias(tcx.ctx)
+
+			if tt.expectedErr != nil {
+				require.Error(t, err)
+				require.ErrorIs(t, err, tt.expectedErr)
+				require.Equal(t, tt.expectedStatus, echo.StatusCode(err))
+			} else {
+				require.NoError(t, err)
+			}
+
+			if err != nil {
+				tcx.e.HTTPErrorHandler(tcx.ctx, err)
+			}
+
+			assert.Equal(t, tt.expectedStatus, tcx.res.Code)
+		})
+	}
+}

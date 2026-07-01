@@ -304,3 +304,37 @@ func (r *PostgresStorage) Close() error {
 func (r *PostgresStorage) Ping(ctx context.Context) error {
 	return r.pool.Ping(ctx)
 }
+
+func (r *PostgresStorage) DeleteBatch(ctx context.Context, batch map[string][]string) error {
+	if len(batch) == 0 {
+		return nil
+	}
+
+	var userIDs []string
+	var aliases []string
+
+	for userID, userAliases := range batch {
+		for _, alias := range userAliases {
+			userIDs = append(userIDs, userID)
+			aliases = append(aliases, alias)
+		}
+	}
+
+	query := `
+		UPDATE urls AS u
+		SET is_deleted = true
+		FROM (
+			SELECT unnest($1::uuid[]) AS user_id, unnest($2::varchar[]) AS alias
+		) AS data
+		WHERE u.user_id = data.user_id
+		  AND u.alias = data.alias
+		  AND u.is_deleted = false;
+	`
+
+	_, err := r.pool.Exec(ctx, query, userIDs, aliases)
+	if err != nil {
+		return fmt.Errorf("repository: failed to execute batch update: %w", err)
+	}
+
+	return nil
+}

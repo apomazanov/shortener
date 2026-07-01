@@ -21,6 +21,7 @@ type BusinessService interface {
 	GetUserURLs(ctx context.Context, userID string) (data map[string]string, err error)
 	CreateURLAlias(ctx context.Context, original string, userID string) (alias string, err error)
 	CreateURLAliasBatch(ctx context.Context, originals []string, userID string) (written map[string]string, err error)
+	DeleteUserURLs(ctx context.Context, userID string, aliases []string) error
 }
 
 //go:generate mockgen -destination=mocks/mock_health.go -package=mocks github.com/apomazanov/shortener/internal/handlers HealthService
@@ -103,6 +104,10 @@ func (h *Handler) Get(c *echo.Context) error {
 	if err == nil {
 		// Return original URL with redirection
 		return c.Redirect(http.StatusTemporaryRedirect, original)
+	}
+
+	if errors.Is(err, domain.ErrFoundDeleted) {
+		return c.NoContent(http.StatusGone)
 	}
 
 	if errors.Is(err, domain.ErrNotFound) {
@@ -467,6 +472,80 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 	}
 
 	return c.JSON(responseStatus, responseData)
+}
+
+func (h *Handler) DeleteUserURLsByAlias(c *echo.Context) error {
+	log := h.log.With().Str("op", "handler.DeleteUserURLs").Logger()
+
+	// Raw context for deeper layers, evading 'echo' dependency
+	ctx := c.Request().Context()
+
+	// User ID
+	cookieExists, ok := extractCookieExistsFromCtx(c)
+	if !ok {
+		log.Error().
+			Msg("Failed extracting cookie-exists from context")
+
+		return echo.ErrInternalServerError
+	}
+
+	if !cookieExists {
+		return echo.ErrUnauthorized
+	}
+
+	ctxUserID, ok := extractUserIDFromCtx(c)
+	if !ok {
+		log.Error().
+			Msg("Failed extracting user-id from context")
+
+		return echo.ErrInternalServerError
+	}
+
+	// Invalid user-id leads to auth failure
+	if _, err := uuid.Parse(ctxUserID); err != nil {
+		return echo.ErrUnauthorized
+	}
+
+	var aliases []string
+
+	// Reading body
+	if err := c.Bind(&aliases); err != nil {
+		log.Info().
+			Err(err).
+			Msg("failed to read request body")
+
+		return echo.ErrBadRequest
+	}
+
+	// Validating
+	if len(aliases) == 0 {
+		log.Info().
+			Msg("empty request data")
+
+		return echo.ErrBadRequest
+	}
+	for _, alias := range aliases {
+		if len(alias) != aliasSize {
+			log.Info().
+				Str("alias", alias).
+				Msg("invalid alias")
+
+			return echo.ErrBadRequest
+		}
+	}
+
+	// Delete user's URLs
+	err := h.business.DeleteUserURLs(ctx, ctxUserID, aliases)
+	if err != nil {
+
+		log.Error().
+			Err(err).
+			Msg("something went wrong")
+
+		return echo.ErrInternalServerError
+	}
+
+	return c.NoContent(http.StatusAccepted)
 }
 
 func (h *Handler) Reject(c *echo.Context) error {

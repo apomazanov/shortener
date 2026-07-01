@@ -40,6 +40,20 @@ func (m *MockRepo) EXPECT() *MockRepoMockRecorder {
 	return m.recorder
 }
 
+// DeleteBatch mocks base method.
+func (m *MockRepo) DeleteBatch(ctx context.Context, batch map[string][]string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteBatch", ctx, batch)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteBatch indicates an expected call of DeleteBatch.
+func (mr *MockRepoMockRecorder) DeleteBatch(ctx, batch any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteBatch", reflect.TypeOf((*MockRepo)(nil).DeleteBatch), ctx, batch)
+}
+
 // Get mocks base method.
 func (m *MockRepo) Get(ctx context.Context, alias string) (string, error) {
 	m.ctrl.T.Helper()
