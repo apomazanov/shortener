@@ -120,7 +120,8 @@ func (r *PostgresStorage) Save(
 	query := `
 		INSERT INTO urls (alias, original, user_id)
 		VALUES ($1, $2, $3)
-		ON CONFLICT (original) DO UPDATE SET original = EXCLUDED.original
+		ON CONFLICT (original) WHERE is_deleted = false
+		DO UPDATE SET original = EXCLUDED.original
 		RETURNING alias;
 	`
 
@@ -175,7 +176,7 @@ func (r *PostgresStorage) SaveBatch(
 		builder = builder.Values(alias, original, userID)
 	}
 
-	builder = builder.Suffix("ON CONFLICT (original) DO UPDATE SET original = EXCLUDED.original RETURNING alias, original")
+	builder = builder.Suffix("ON CONFLICT (original) WHERE is_deleted = false DO UPDATE SET original = EXCLUDED.original RETURNING alias, original")
 
 	query, args, err := builder.ToSql()
 	if err != nil {
