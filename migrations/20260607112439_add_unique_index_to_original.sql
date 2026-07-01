@@ -1,5 +1,9 @@
 -- +goose Up
-ALTER TABLE urls ADD CONSTRAINT urls_unique_original UNIQUE (original);
+-- +goose StatementBegin
+ALTER TABLE urls ADD CONSTRAINT uq_urls_original UNIQUE (original);
+-- +goose StatementEnd
 
 -- +goose Down
-ALTER TABLE urls DROP CONSTRAINT IF EXISTS urls_unique_original;
+-- +goose StatementBegin
+ALTER TABLE urls DROP CONSTRAINT IF EXISTS uq_urls_original;
+-- +goose StatementEnd
