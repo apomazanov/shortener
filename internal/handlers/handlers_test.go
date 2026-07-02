@@ -295,6 +295,10 @@ func TestHandler_GetUserURLs(t *testing.T) {
 				m.service.EXPECT().
 					GetUserURLs(gomock.Any(), gomock.Any()).
 					Times(0)
+
+				m.jwt.EXPECT().
+					CreateCookieWithUserID(gomock.Any()).
+					Times(1)
 			},
 			expectedErr:    echo.ErrUnauthorized,
 			expectedStatus: http.StatusUnauthorized,
@@ -533,7 +537,7 @@ func TestHandler_CreateText(t *testing.T) {
 				m.service.EXPECT().
 					CreateURLAlias(gomock.Any(), validURL, gomock.Any()).
 					Return(alias, nil).
-					Times(1)
+					Times(0)
 
 				m.jwt.EXPECT().
 					CreateCookieWithUserID(gomock.Any()).
@@ -769,7 +773,7 @@ func TestHandler_CreateJson(t *testing.T) {
 				m.service.EXPECT().
 					CreateURLAlias(gomock.Any(), validURL, gomock.Any()).
 					Return(alias, nil).
-					Times(1)
+					Times(0)
 
 				m.jwt.EXPECT().
 					CreateCookieWithUserID(gomock.Any()).
@@ -1097,7 +1101,7 @@ func TestHandler_CreateJsonBatch(t *testing.T) {
 						validURL1: alias1,
 						validURL2: alias2,
 					}, nil).
-					Times(1)
+					Times(0)
 
 				m.config.EXPECT().
 					GetURLBase().
@@ -1224,6 +1228,10 @@ func TestHandler_DeleteUserURLsByAlias(t *testing.T) {
 				m.service.EXPECT().
 					DeleteUserURLs(gomock.Any(), gomock.Any(), gomock.Any()).
 					Times(0)
+
+				m.jwt.EXPECT().
+					CreateCookieWithUserID(gomock.Any()).
+					Times(1)
 			},
 			expectedErr:       echo.ErrUnauthorized,
 			expectedStatus:    http.StatusUnauthorized,
@@ -1237,6 +1245,10 @@ func TestHandler_DeleteUserURLsByAlias(t *testing.T) {
 				m.service.EXPECT().
 					DeleteUserURLs(gomock.Any(), gomock.Any(), gomock.Any()).
 					Times(0)
+
+				m.jwt.EXPECT().
+					CreateCookieWithUserID(gomock.Any()).
+					Times(1)
 			},
 			expectedErr:       echo.ErrUnauthorized,
 			expectedStatus:    http.StatusUnauthorized,

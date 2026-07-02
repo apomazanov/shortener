@@ -244,9 +244,9 @@ func (r *PostgresStorage) Get(ctx context.Context, alias string) (original strin
 		FROM urls
 		WHERE alias = $1;
 	`
-	var is_deleted bool
+	var isDeleted bool
 
-	err = r.pool.QueryRow(queryCtx, query, alias).Scan(&original, &is_deleted)
+	err = r.pool.QueryRow(queryCtx, query, alias).Scan(&original, &isDeleted)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", domain.ErrNotFound
@@ -254,7 +254,7 @@ func (r *PostgresStorage) Get(ctx context.Context, alias string) (original strin
 		return "", fmt.Errorf("repo: database error: %w", err)
 	}
 
-	if is_deleted {
+	if isDeleted {
 		return "", domain.ErrFoundDeleted
 	}
 
@@ -287,14 +287,14 @@ func (r *PostgresStorage) GetByUser(ctx context.Context, userID string) (data ma
 	data = make(map[string]string)
 	for rows.Next() {
 		var k, v string
-		var is_deleted bool
+		var isDeleted bool
 
-		err := rows.Scan(&k, &v, &is_deleted)
+		err := rows.Scan(&k, &v, &isDeleted)
 		if err != nil {
 			return nil, fmt.Errorf("repo: database error: %w", err)
 		}
 
-		if !is_deleted {
+		if !isDeleted {
 			data[k] = v
 		}
 	}

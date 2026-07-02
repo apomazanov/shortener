@@ -27,7 +27,7 @@ func New(args []string) (*Config, error) {
 		StorageFile:   "",
 		DatabaseDSN:   "",
 		NoDBMigration: false,
-		JWTSecret:     "very secure key",
+		JWTSecret:     "",
 	}
 
 	// Flags overwrite default values
@@ -54,6 +54,11 @@ func New(args []string) (*Config, error) {
 		return nil, fmt.Errorf("invalid BaseURL: %w", err)
 	}
 	cfg.BaseURL = strings.TrimSuffix(cfg.BaseURL, "/")
+
+	// Validating JWT secret
+	if cfg.JWTSecret == "" {
+		return nil, fmt.Errorf("JWT secret not set")
+	}
 
 	return &cfg, nil
 }

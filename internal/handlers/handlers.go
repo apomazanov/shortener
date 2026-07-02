@@ -8,7 +8,6 @@ import (
 	"net/url"
 
 	"github.com/apomazanov/shortener/internal/domain"
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog"
 )
@@ -132,44 +131,29 @@ func (h *Handler) GetUserURLs(c *echo.Context) error {
 	// Raw context for deeper layers, evading 'echo' dependency
 	ctx := c.Request().Context()
 
-	// User ID
-	cookieExists, ok := extractCookieExistsFromCtx(c)
-	if !ok {
+	// Cookie
+
+	cookieData := handleCookie(c, h.JWT)
+	if cookieData.err != nil {
 		log.Error().
-			Msg("Failed extracting cookie-exists from context")
+			Err(cookieData.err).
+			Msg("Failed cookie handling")
 
 		return echo.ErrInternalServerError
 	}
 
-	if !cookieExists {
-		// Cookie created for new users (user-id missing)
-		newCookie, err := h.JWT.CreateCookieWithUserID(newUUIDString())
-		if err != nil {
-			log.Error().
-				Err(err).
-				Msg("cookie creation failed")
-			return echo.ErrInternalServerError
-		}
-
-		c.SetCookie(newCookie)
+	if !cookieData.exists {
+		c.SetCookie(cookieData.newCookie)
 		return c.NoContent(http.StatusNoContent)
 	}
 
-	ctxUserID, ok := extractUserIDFromCtx(c)
-	if !ok {
-		log.Error().
-			Msg("Failed extracting user-id from context")
-
-		return echo.ErrInternalServerError
-	}
-
 	// Invalid user-id leads to auth failure
-	if _, err := uuid.Parse(ctxUserID); err != nil {
+	if !cookieData.valid {
 		return echo.ErrUnauthorized
 	}
 
 	// Find user's URLs
-	data, err := h.business.GetUserURLs(ctx, ctxUserID)
+	data, err := h.business.GetUserURLs(ctx, cookieData.userID)
 	if err != nil {
 
 		if errors.Is(err, domain.ErrNotFound) {
@@ -217,18 +201,20 @@ func (h *Handler) CreateText(c *echo.Context) error {
 
 	log := h.log.With().Str("op", "handler.CreateText").Logger()
 
-	// User ID
-	ctxUserID, ok := extractUserIDFromCtx(c)
-	if !ok {
+	// Cookie
+
+	cookie := handleCookie(c, h.JWT)
+	if cookie.err != nil {
 		log.Error().
-			Msg("Failed extracting user-id from context")
+			Err(cookie.err).
+			Msg("Failed cookie handling")
 
 		return echo.ErrInternalServerError
 	}
 
-	userID := ctxUserID
-	if _, err := uuid.Parse(userID); err != nil {
-		userID = newUUIDString()
+	userID := cookie.userID
+	if !cookie.valid {
+		userID = cookie.newUserID
 	}
 
 	// Raw context for deeper layers, evading 'echo' dependency
@@ -276,16 +262,8 @@ func (h *Handler) CreateText(c *echo.Context) error {
 	// Sending back short URL
 
 	// Cookie created for new users (user-id missing in ctx or invalid)
-	if ctxUserID == "" || ctxUserID != userID {
-		newCookie, err := h.JWT.CreateCookieWithUserID(userID)
-		if err != nil {
-			log.Error().
-				Err(err).
-				Msg("cookie creation failed")
-			return echo.ErrInternalServerError
-		}
-
-		c.SetCookie(newCookie)
+	if !cookie.valid {
+		c.SetCookie(cookie.newCookie)
 	}
 
 	// base URL already validated during config
@@ -299,18 +277,20 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 
 	log := h.log.With().Str("op", "handler.CreateJson").Logger()
 
-	// User ID
-	ctxUserID, ok := extractUserIDFromCtx(c)
-	if !ok {
+	// Cookie
+
+	cookie := handleCookie(c, h.JWT)
+	if cookie.err != nil {
 		log.Error().
-			Msg("Failed extracting user-id from context")
+			Err(cookie.err).
+			Msg("Failed cookie handling")
 
 		return echo.ErrInternalServerError
 	}
 
-	userID := ctxUserID
-	if _, err := uuid.Parse(userID); err != nil {
-		userID = newUUIDString()
+	userID := cookie.userID
+	if !cookie.valid {
+		userID = cookie.newUserID
 	}
 
 	// Raw context for deeper layers, evading 'echo' dependency
@@ -354,16 +334,8 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 	}
 
 	// Cookie created for new users (user-id missing in ctx or invalid)
-	if ctxUserID == "" || ctxUserID != userID {
-		newCookie, err := h.JWT.CreateCookieWithUserID(userID)
-		if err != nil {
-			log.Error().
-				Err(err).
-				Msg("cookie creation failed")
-			return echo.ErrInternalServerError
-		}
-
-		c.SetCookie(newCookie)
+	if !cookie.valid {
+		c.SetCookie(cookie.newCookie)
 	}
 
 	// Sending back short URL
@@ -375,18 +347,20 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 
 	log := h.log.With().Str("op", "handler.CreateJsonBatch").Logger()
 
-	// User ID
-	ctxUserID, ok := extractUserIDFromCtx(c)
-	if !ok {
+	// Cookie
+
+	cookie := handleCookie(c, h.JWT)
+	if cookie.err != nil {
 		log.Error().
-			Msg("Failed extracting user-id from context")
+			Err(cookie.err).
+			Msg("Failed cookie handling")
 
 		return echo.ErrInternalServerError
 	}
 
-	userID := ctxUserID
-	if _, err := uuid.Parse(userID); err != nil {
-		userID = newUUIDString()
+	userID := cookie.userID
+	if !cookie.valid {
+		userID = cookie.newUserID
 	}
 
 	// Raw context for deeper layers, evading 'echo' dependency
@@ -459,16 +433,8 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 	}
 
 	// Cookie created for new users (user-id missing in ctx or invalid)
-	if ctxUserID == "" || ctxUserID != userID {
-		newCookie, err := h.JWT.CreateCookieWithUserID(userID)
-		if err != nil {
-			log.Error().
-				Err(err).
-				Msg("cookie creation failed")
-			return echo.ErrInternalServerError
-		}
-
-		c.SetCookie(newCookie)
+	if !cookie.valid {
+		c.SetCookie(cookie.newCookie)
 	}
 
 	return c.JSON(responseStatus, responseData)
@@ -480,29 +446,19 @@ func (h *Handler) DeleteUserURLsByAlias(c *echo.Context) error {
 	// Raw context for deeper layers, evading 'echo' dependency
 	ctx := c.Request().Context()
 
-	// User ID
-	cookieExists, ok := extractCookieExistsFromCtx(c)
-	if !ok {
+	// Cookie
+
+	cookie := handleCookie(c, h.JWT)
+	if cookie.err != nil {
 		log.Error().
-			Msg("Failed extracting cookie-exists from context")
+			Err(cookie.err).
+			Msg("Failed cookie handling")
 
 		return echo.ErrInternalServerError
 	}
 
-	if !cookieExists {
-		return echo.ErrUnauthorized
-	}
-
-	ctxUserID, ok := extractUserIDFromCtx(c)
-	if !ok {
-		log.Error().
-			Msg("Failed extracting user-id from context")
-
-		return echo.ErrInternalServerError
-	}
-
-	// Invalid user-id leads to auth failure
-	if _, err := uuid.Parse(ctxUserID); err != nil {
+	// Missing cookie or invalid user-id lead to auth failure
+	if !cookie.exists || !cookie.valid {
 		return echo.ErrUnauthorized
 	}
 
@@ -535,7 +491,7 @@ func (h *Handler) DeleteUserURLsByAlias(c *echo.Context) error {
 	}
 
 	// Delete user's URLs
-	err := h.business.DeleteUserURLs(ctx, ctxUserID, aliases)
+	err := h.business.DeleteUserURLs(ctx, cookie.userID, aliases)
 	if err != nil {
 
 		log.Error().
@@ -556,35 +512,4 @@ func (h *Handler) Reject(c *echo.Context) error {
 		Msg("invalid path in request")
 
 	return echo.ErrBadRequest
-}
-
-func extractUserIDFromCtx(c *echo.Context) (userID string, ok bool) {
-
-	userIDAny := c.Get("user-id")
-
-	if userIDAny == nil {
-		// missing
-		return "", true
-	}
-
-	userID, ok = userIDAny.(string)
-	return userID, ok
-}
-
-func extractCookieExistsFromCtx(c *echo.Context) (exists bool, ok bool) {
-
-	existsAny := c.Get("cookie-exists")
-
-	if existsAny == nil {
-		// missing
-		return false, true
-	}
-
-	exists, ok = existsAny.(bool)
-	return exists, ok
-}
-
-func newUUIDString() string {
-	uuid := uuid.New()
-	return uuid.String()
 }
