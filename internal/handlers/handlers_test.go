@@ -1106,7 +1106,7 @@ func TestHandler_CreateJsonBatch(t *testing.T) {
 				m.config.EXPECT().
 					GetURLBase().
 					Return(baseURL).
-					Times(2)
+					Times(0)
 
 				m.jwt.EXPECT().
 					CreateCookieWithUserID(gomock.Any()).
