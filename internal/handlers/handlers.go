@@ -14,18 +14,28 @@ import (
 
 const aliasSize = 6
 
+//go:generate mockgen -destination=mocks/mock_business.go -package=mocks github.com/apomazanov/shortener/internal/handlers BusinessService
 type BusinessService interface {
 	GetOriginalURL(ctx context.Context, alias string) (original string, err error)
-	CreateURLAlias(ctx context.Context, original string) (alias string, err error)
-	CreateURLAliasBatch(ctx context.Context, originals []string) (written map[string]string, err error)
+	GetUserURLs(ctx context.Context, userID string) (data map[string]string, err error)
+	CreateURLAlias(ctx context.Context, original string, userID string) (alias string, err error)
+	CreateURLAliasBatch(ctx context.Context, originals []string, userID string) (written map[string]string, err error)
+	DeleteUserURLs(ctx context.Context, userID string, aliases []string) error
 }
 
+//go:generate mockgen -destination=mocks/mock_health.go -package=mocks github.com/apomazanov/shortener/internal/handlers HealthService
 type HealthService interface {
 	Ping(ctx context.Context) error
 }
 
+//go:generate mockgen -destination=mocks/mock_config.go -package=mocks github.com/apomazanov/shortener/internal/handlers URLConfig
 type URLConfig interface {
 	GetURLBase() string
+}
+
+//go:generate mockgen -destination=mocks/mock_JWT.go -package=mocks github.com/apomazanov/shortener/internal/handlers JWT
+type JWT interface {
+	CreateCookieWithUserID(userID string) (*http.Cookie, error)
 }
 
 type Handler struct {
@@ -33,6 +43,7 @@ type Handler struct {
 	health   HealthService
 	cfg      URLConfig
 	log      *zerolog.Logger
+	JWT      JWT
 }
 
 type jsonShortenRequest struct {
@@ -53,17 +64,21 @@ type jsonBatchResponseItem struct {
 	Result string `json:"short_url"`
 }
 
-/* -------------------------------------------------------------------------- */
-func New(b BusinessService, c URLConfig, l *zerolog.Logger, h HealthService) *Handler {
+type jsonGetUserURLsResponseItem struct {
+	ShortURL    string `json:"short_url"`
+	OriginalURL string `json:"original_url"`
+}
+
+func New(b BusinessService, c URLConfig, l *zerolog.Logger, h HealthService, j JWT) *Handler {
 	return &Handler{
 		business: b,
 		health:   h,
 		cfg:      c,
 		log:      l,
+		JWT:      j,
 	}
 }
 
-/* -------------------------------------------------------------------------- */
 func (h *Handler) Get(c *echo.Context) error {
 
 	log := h.log.With().Str("op", "handler.Get").Logger()
@@ -79,7 +94,7 @@ func (h *Handler) Get(c *echo.Context) error {
 			Str("alias", alias).
 			Msg("invalid alias")
 
-		return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
+		return echo.ErrBadRequest
 	}
 
 	// Find original URL
@@ -90,22 +105,80 @@ func (h *Handler) Get(c *echo.Context) error {
 		return c.Redirect(http.StatusTemporaryRedirect, original)
 	}
 
+	if errors.Is(err, domain.ErrFoundDeleted) {
+		return c.NoContent(http.StatusGone)
+	}
+
 	if errors.Is(err, domain.ErrNotFound) {
 		log.Info().
 			Err(err).
 			Msg("alias not found")
 
-		return echo.NewHTTPError(http.StatusNotFound, http.StatusText(http.StatusNotFound))
+		return echo.ErrNotFound
 	}
 
 	log.Error().
 		Err(err).
 		Msg("something went wrong")
 
-	return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+	return echo.ErrInternalServerError
 }
 
-/* -------------------------------------------------------------------------- */
+func (h *Handler) GetUserURLs(c *echo.Context) error {
+
+	log := h.log.With().Str("op", "handler.GetUserURLs").Logger()
+
+	// Raw context for deeper layers, evading 'echo' dependency
+	ctx := c.Request().Context()
+
+	// Cookie
+
+	cookieData := handleCookie(c, h.JWT)
+	if cookieData.err != nil {
+		log.Error().
+			Err(cookieData.err).
+			Msg("Failed cookie handling")
+
+		return echo.ErrInternalServerError
+	}
+
+	if !cookieData.exists {
+		c.SetCookie(cookieData.newCookie)
+		return c.NoContent(http.StatusNoContent)
+	}
+
+	// Invalid user-id leads to auth failure
+	if !cookieData.valid {
+		return echo.ErrUnauthorized
+	}
+
+	// Find user's URLs
+	data, err := h.business.GetUserURLs(ctx, cookieData.userID)
+	if err != nil {
+
+		if errors.Is(err, domain.ErrNotFound) {
+			return c.NoContent(http.StatusNoContent)
+		}
+
+		log.Error().
+			Err(err).
+			Msg("something went wrong")
+
+		return echo.ErrInternalServerError
+	}
+
+	responseData := make([]jsonGetUserURLsResponseItem, 0, len(data))
+
+	for k, v := range data {
+		responseData = append(responseData, jsonGetUserURLsResponseItem{
+			ShortURL:    h.cfg.GetURLBase() + "/" + k,
+			OriginalURL: v,
+		})
+	}
+
+	return c.JSON(http.StatusOK, responseData)
+}
+
 func (h *Handler) Ping(c *echo.Context) error {
 
 	log := h.log.With().Str("op", "handler.Ping").Logger()
@@ -118,16 +191,31 @@ func (h *Handler) Ping(c *echo.Context) error {
 			Err(err).
 			Msg("health check failed")
 
-		return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		return echo.ErrInternalServerError
 	}
 
 	return c.NoContent(http.StatusOK)
 }
 
-/* -------------------------------------------------------------------------- */
 func (h *Handler) CreateText(c *echo.Context) error {
 
 	log := h.log.With().Str("op", "handler.CreateText").Logger()
+
+	// Cookie
+
+	cookie := handleCookie(c, h.JWT)
+	if cookie.err != nil {
+		log.Error().
+			Err(cookie.err).
+			Msg("Failed cookie handling")
+
+		return echo.ErrInternalServerError
+	}
+
+	userID := cookie.userID
+	if !cookie.valid {
+		userID = cookie.newUserID
+	}
 
 	// Raw context for deeper layers, evading 'echo' dependency
 	ctx := c.Request().Context()
@@ -139,7 +227,7 @@ func (h *Handler) CreateText(c *echo.Context) error {
 			Err(err).
 			Msg("failed to read request body")
 
-		return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
+		return echo.ErrBadRequest
 	}
 
 	// Casting body to string, validating
@@ -150,13 +238,13 @@ func (h *Handler) CreateText(c *echo.Context) error {
 			Any("request_data", requestData).
 			Msg("invalid request data")
 
-		return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
+		return echo.ErrBadRequest
 	}
 
 	responseStatus := http.StatusCreated
 
 	// Getting alias
-	alias, err := h.business.CreateURLAlias(ctx, requestData.URL)
+	alias, err := h.business.CreateURLAlias(ctx, requestData.URL, userID)
 	if err != nil {
 
 		if errors.Is(err, domain.ErrOriginalURLDuplicate) {
@@ -167,23 +255,43 @@ func (h *Handler) CreateText(c *echo.Context) error {
 				Str("alias", alias).
 				Msg("alias creation failed")
 
-			return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+			return echo.ErrInternalServerError
 		}
 	}
 
 	// Sending back short URL
+
+	// Cookie created for new users (user-id missing in ctx or invalid)
+	if !cookie.valid {
+		c.SetCookie(cookie.newCookie)
+	}
 
 	// base URL already validated during config
 	shortUrl := h.cfg.GetURLBase() + "/" + alias
 	return c.String(responseStatus, shortUrl)
 }
 
-/* -------------------------------------------------------------------------- */
 func (h *Handler) CreateJson(c *echo.Context) error {
 	var requestData jsonShortenRequest
 	var responseData jsonShortenResponse
 
 	log := h.log.With().Str("op", "handler.CreateJson").Logger()
+
+	// Cookie
+
+	cookie := handleCookie(c, h.JWT)
+	if cookie.err != nil {
+		log.Error().
+			Err(cookie.err).
+			Msg("Failed cookie handling")
+
+		return echo.ErrInternalServerError
+	}
+
+	userID := cookie.userID
+	if !cookie.valid {
+		userID = cookie.newUserID
+	}
 
 	// Raw context for deeper layers, evading 'echo' dependency
 	ctx := c.Request().Context()
@@ -194,7 +302,7 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 			Err(err).
 			Msg("failed to read request body")
 
-		return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
+		return echo.ErrBadRequest
 	}
 
 	// Validating
@@ -204,13 +312,13 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 			Any("request_data", requestData).
 			Msg("invalid request data")
 
-		return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
+		return echo.ErrBadRequest
 	}
 
 	responseStatus := http.StatusCreated
 
 	// Getting alias
-	alias, err := h.business.CreateURLAlias(ctx, requestData.URL)
+	alias, err := h.business.CreateURLAlias(ctx, requestData.URL, userID)
 	if err != nil {
 
 		if errors.Is(err, domain.ErrOriginalURLDuplicate) {
@@ -221,8 +329,13 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 				Str("alias", alias).
 				Msg("alias creation failed")
 
-			return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+			return echo.ErrInternalServerError
 		}
+	}
+
+	// Cookie created for new users (user-id missing in ctx or invalid)
+	if !cookie.valid {
+		c.SetCookie(cookie.newCookie)
 	}
 
 	// Sending back short URL
@@ -230,10 +343,25 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 	return c.JSON(responseStatus, responseData)
 }
 
-/* -------------------------------------------------------------------------- */
 func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 
 	log := h.log.With().Str("op", "handler.CreateJsonBatch").Logger()
+
+	// Cookie
+
+	cookie := handleCookie(c, h.JWT)
+	if cookie.err != nil {
+		log.Error().
+			Err(cookie.err).
+			Msg("Failed cookie handling")
+
+		return echo.ErrInternalServerError
+	}
+
+	userID := cookie.userID
+	if !cookie.valid {
+		userID = cookie.newUserID
+	}
 
 	// Raw context for deeper layers, evading 'echo' dependency
 	ctx := c.Request().Context()
@@ -246,7 +374,7 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 			Err(err).
 			Msg("failed to read request body")
 
-		return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
+		return echo.ErrBadRequest
 	}
 
 	batchSize := len(requestData)
@@ -260,7 +388,7 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 				Any("request_item", item).
 				Msg("invalid request data")
 
-			return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
+			return echo.ErrBadRequest
 		}
 	}
 
@@ -275,7 +403,7 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 
 	// Getting aliases
 
-	written, err := h.business.CreateURLAliasBatch(ctx, originals)
+	written, err := h.business.CreateURLAliasBatch(ctx, originals, userID)
 	if err != nil {
 
 		if errors.Is(err, domain.ErrOriginalURLDuplicate) {
@@ -285,7 +413,7 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 				Err(err).
 				Msg("alias creation failed")
 
-			return echo.NewHTTPError(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+			return echo.ErrInternalServerError
 		}
 	}
 
@@ -304,10 +432,78 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 		}
 	}
 
+	// Cookie created for new users (user-id missing in ctx or invalid)
+	if !cookie.valid {
+		c.SetCookie(cookie.newCookie)
+	}
+
 	return c.JSON(responseStatus, responseData)
 }
 
-/* -------------------------------------------------------------------------- */
+func (h *Handler) DeleteUserURLsByAlias(c *echo.Context) error {
+	log := h.log.With().Str("op", "handler.DeleteUserURLs").Logger()
+
+	// Raw context for deeper layers, evading 'echo' dependency
+	ctx := c.Request().Context()
+
+	// Cookie
+
+	cookie := handleCookie(c, h.JWT)
+	if cookie.err != nil {
+		log.Error().
+			Err(cookie.err).
+			Msg("Failed cookie handling")
+
+		return echo.ErrInternalServerError
+	}
+
+	// Missing cookie or invalid user-id lead to auth failure
+	if !cookie.exists || !cookie.valid {
+		return echo.ErrUnauthorized
+	}
+
+	var aliases []string
+
+	// Reading body
+	if err := c.Bind(&aliases); err != nil {
+		log.Info().
+			Err(err).
+			Msg("failed to read request body")
+
+		return echo.ErrBadRequest
+	}
+
+	// Validating
+	if len(aliases) == 0 {
+		log.Info().
+			Msg("empty request data")
+
+		return echo.ErrBadRequest
+	}
+	for _, alias := range aliases {
+		if len(alias) != aliasSize {
+			log.Info().
+				Str("alias", alias).
+				Msg("invalid alias")
+
+			return echo.ErrBadRequest
+		}
+	}
+
+	// Delete user's URLs
+	err := h.business.DeleteUserURLs(ctx, cookie.userID, aliases)
+	if err != nil {
+
+		log.Error().
+			Err(err).
+			Msg("something went wrong")
+
+		return echo.ErrInternalServerError
+	}
+
+	return c.NoContent(http.StatusAccepted)
+}
+
 func (h *Handler) Reject(c *echo.Context) error {
 
 	h.log.Warn().
@@ -315,5 +511,5 @@ func (h *Handler) Reject(c *echo.Context) error {
 		Str("remote_ip", c.RealIP()).
 		Msg("invalid path in request")
 
-	return echo.NewHTTPError(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
+	return echo.ErrBadRequest
 }

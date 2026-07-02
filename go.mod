@@ -8,11 +8,14 @@ require (
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-playground/validator/v10 v10.30.2
+	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/google/uuid v1.6.0
 	github.com/jackc/pgerrcode v0.0.0-20250907135507-afb5586c32a6
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/pashagolub/pgxmock/v3 v3.4.0
 	github.com/pressly/goose/v3 v3.27.1
 	github.com/rs/zerolog v1.35.1
+	go.uber.org/mock v0.6.0
 )
 
 require (

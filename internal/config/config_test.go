@@ -13,6 +13,7 @@ func TestNew(t *testing.T) {
 		os.Unsetenv("ALIAS_SIZE")
 		os.Unsetenv("DATABASE_DSN")
 		os.Unsetenv("NO_DB_MIGRATION")
+		os.Unsetenv("JWT_SECRET")
 	}
 
 	tests := []struct {
@@ -32,13 +33,16 @@ func TestNew(t *testing.T) {
 				StorageFile:   "",
 				DatabaseDSN:   "",
 				NoDBMigration: false,
+				JWTSecret:     "",
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name: "flags override defaults",
 			args: []string{"-a", ":9090", "-b", "http://example.com", "-f", "/tmp/test.json", "-d", "postgres://user:pass@localhost:5432/db"},
-			env:  map[string]string{},
+			env: map[string]string{
+				"JWT_SECRET": "secure key",
+			},
 			want: &Config{
 				ServerAddr:    ":9090",
 				BaseURL:       "http://example.com",
@@ -56,6 +60,7 @@ func TestNew(t *testing.T) {
 				"BASE_URL":          "http://env.com",
 				"FILE_STORAGE_PATH": "/env/path.json",
 				"DATABASE_DSN":      "postgres://env:env@localhost:5432/env_db",
+				"JWT_SECRET":        "secure key",
 			},
 			want: &Config{
 				ServerAddr:    ":7070",
@@ -63,6 +68,7 @@ func TestNew(t *testing.T) {
 				StorageFile:   "/env/path.json",
 				DatabaseDSN:   "postgres://env:env@localhost:5432/env_db",
 				NoDBMigration: false,
+				JWTSecret:     "secure key",
 			},
 			wantErr: false,
 		},
@@ -71,6 +77,7 @@ func TestNew(t *testing.T) {
 			args: []string{},
 			env: map[string]string{
 				"NO_DB_MIGRATION": "true",
+				"JWT_SECRET":      "secure key",
 			},
 			want: &Config{
 				ServerAddr:    ":8080",
@@ -82,8 +89,17 @@ func TestNew(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "invalid base url",
-			args:    []string{"-b", "not-a-url"},
+			name: "invalid base url",
+			args: []string{"-b", "not-a-url"},
+			env: map[string]string{
+				"JWT_SECRET": "secure key",
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "empty JWT secret",
+			args:    []string{"-a", ":9090"},
 			env:     map[string]string{},
 			want:    nil,
 			wantErr: true,
@@ -91,7 +107,9 @@ func TestNew(t *testing.T) {
 		{
 			name: "trim trailing slash in base url",
 			args: []string{"-b", "http://example.com/"},
-			env:  map[string]string{},
+			env: map[string]string{
+				"JWT_SECRET": "secure key",
+			},
 			want: &Config{
 				ServerAddr:    ":8080",
 				BaseURL:       "http://example.com",
@@ -144,6 +162,7 @@ func TestConfigGetters(t *testing.T) {
 		StorageFile:   "/test/file",
 		DatabaseDSN:   "postgres://localhost:5432/test",
 		NoDBMigration: true,
+		JWTSecret:     "secure key",
 	}
 
 	if cfg.GetServerAddress() != ":1234" {
@@ -160,5 +179,8 @@ func TestConfigGetters(t *testing.T) {
 	}
 	if cfg.GetNoDBMigration() != true {
 		t.Errorf("GetNoDBMigration() = %v, want %v", cfg.GetNoDBMigration(), true)
+	}
+	if cfg.GetJWTSecret() != "secure key" {
+		t.Errorf("GetJWTSecret() = %v, want %v", cfg.GetNoDBMigration(), "secure key")
 	}
 }

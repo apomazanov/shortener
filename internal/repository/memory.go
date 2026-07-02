@@ -14,13 +14,16 @@ type MemStorage struct {
 	cache map[string]string
 }
 
-/* -------------------------------------------------------------------------- */
 func NewMemStorage() *MemStorage {
 	return &MemStorage{cache: make(map[string]string)}
 }
 
-/* -------------------------------------------------------------------------- */
-func (r *MemStorage) Save(ctx context.Context, alias string, original string) (usedAlias string, err error) {
+func (r *MemStorage) Save(
+	ctx context.Context,
+	alias string,
+	original string,
+	userID string,
+) (usedAlias string, err error) {
 	if err := ctx.Err(); err != nil {
 		return "", fmt.Errorf("repo: save aborted: %w", err)
 	}
@@ -49,8 +52,11 @@ func (r *MemStorage) Save(ctx context.Context, alias string, original string) (u
 	return alias, nil
 }
 
-/* -------------------------------------------------------------------------- */
-func (r *MemStorage) SaveBatch(ctx context.Context, toWrite map[string]string) (written map[string]string, err error) {
+func (r *MemStorage) SaveBatch(
+	ctx context.Context,
+	toWrite map[string]string,
+	userID string,
+) (written map[string]string, err error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("repo: batch save aborted: %w", err)
 	}
@@ -102,7 +108,6 @@ MainLoop:
 	return written, nil
 }
 
-/* -------------------------------------------------------------------------- */
 func (r *MemStorage) Get(ctx context.Context, alias string) (original string, err error) {
 	if err := ctx.Err(); err != nil {
 		return "", fmt.Errorf("repo: get aborted: %w", err)
@@ -119,12 +124,18 @@ func (r *MemStorage) Get(ctx context.Context, alias string) (original string, er
 	return "", domain.ErrNotFound
 }
 
-/* -------------------------------------------------------------------------- */
+func (r *MemStorage) GetByUser(ctx context.Context, userID string) (data map[string]string, err error) {
+	return nil, domain.ErrNotFound
+}
+
 func (r *MemStorage) Close() error {
 	return nil
 }
 
-/* -------------------------------------------------------------------------- */
 func (r *MemStorage) Ping(ctx context.Context) error {
+	return nil
+}
+
+func (r *MemStorage) DeleteBatch(ctx context.Context, batch map[string][]string) error {
 	return nil
 }

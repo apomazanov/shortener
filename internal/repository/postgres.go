@@ -40,7 +40,6 @@ type PostgresStorage struct {
 	pool pgxPooler
 }
 
-/* -------------------------------------------------------------------------- */
 func runMigrations(ctx context.Context, dsn string) error {
 
 	goose.SetBaseFS(migrations.EmbedFS)
@@ -64,7 +63,6 @@ func runMigrations(ctx context.Context, dsn string) error {
 	return nil
 }
 
-/* -------------------------------------------------------------------------- */
 func NewPostgresStorage(cfg PostgresConfig) (*PostgresStorage, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -102,8 +100,13 @@ func NewPostgresStorage(cfg PostgresConfig) (*PostgresStorage, error) {
 	return &PostgresStorage{pool: pool}, nil
 }
 
-/* -------------------------------------------------------------------------- */
-func (r *PostgresStorage) Save(ctx context.Context, alias string, original string) (writtenAlias string, err error) {
+func (r *PostgresStorage) Save(
+	ctx context.Context,
+	alias string,
+	original string,
+	userID string,
+) (writtenAlias string, err error) {
+
 	if err := ctx.Err(); err != nil {
 		return "", fmt.Errorf("repo: save aborted: %w", err)
 	}
@@ -115,15 +118,16 @@ func (r *PostgresStorage) Save(ctx context.Context, alias string, original strin
 	// creating query
 
 	query := `
-		INSERT INTO urls (alias, original)
-		VALUES ($1, $2)
-		ON CONFLICT (original) DO UPDATE SET original = EXCLUDED.original
+		INSERT INTO urls (alias, original, user_id)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (original) WHERE is_deleted = false
+		DO UPDATE SET original = EXCLUDED.original
 		RETURNING alias;
 	`
 
 	// executing
 
-	err = r.pool.QueryRow(queryCtx, query, alias, original).Scan(&writtenAlias)
+	err = r.pool.QueryRow(queryCtx, query, alias, original, userID).Scan(&writtenAlias)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -143,8 +147,11 @@ func (r *PostgresStorage) Save(ctx context.Context, alias string, original strin
 	return writtenAlias, nil
 }
 
-/* -------------------------------------------------------------------------- */
-func (r *PostgresStorage) SaveBatch(ctx context.Context, toWrite map[string]string) (written map[string]string, err error) {
+func (r *PostgresStorage) SaveBatch(
+	ctx context.Context,
+	toWrite map[string]string,
+	userID string,
+) (written map[string]string, err error) {
 
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("repo: batch save aborted: %w", err)
@@ -163,13 +170,13 @@ func (r *PostgresStorage) SaveBatch(ctx context.Context, toWrite map[string]stri
 	builder := squirrel.StatementBuilder.
 		PlaceholderFormat(squirrel.Dollar).
 		Insert("urls").
-		Columns("alias", "original")
+		Columns("alias", "original", "user_id")
 
 	for original, alias := range toWrite {
-		builder = builder.Values(alias, original)
+		builder = builder.Values(alias, original, userID)
 	}
 
-	builder = builder.Suffix("ON CONFLICT (original) DO UPDATE SET original = EXCLUDED.original RETURNING alias, original")
+	builder = builder.Suffix("ON CONFLICT (original) WHERE is_deleted = false DO UPDATE SET original = EXCLUDED.original RETURNING alias, original")
 
 	query, args, err := builder.ToSql()
 	if err != nil {
@@ -224,7 +231,6 @@ func (r *PostgresStorage) SaveBatch(ctx context.Context, toWrite map[string]stri
 
 }
 
-/* -------------------------------------------------------------------------- */
 func (r *PostgresStorage) Get(ctx context.Context, alias string) (original string, err error) {
 	if err := ctx.Err(); err != nil {
 		return "", fmt.Errorf("repo: get aborted: %w", err)
@@ -234,12 +240,13 @@ func (r *PostgresStorage) Get(ctx context.Context, alias string) (original strin
 	defer cancel()
 
 	query := `
-		SELECT original 
-		FROM urls 
+		SELECT original, is_deleted
+		FROM urls
 		WHERE alias = $1;
 	`
+	var isDeleted bool
 
-	err = r.pool.QueryRow(queryCtx, query, alias).Scan(&original)
+	err = r.pool.QueryRow(queryCtx, query, alias).Scan(&original, &isDeleted)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", domain.ErrNotFound
@@ -247,16 +254,96 @@ func (r *PostgresStorage) Get(ctx context.Context, alias string) (original strin
 		return "", fmt.Errorf("repo: database error: %w", err)
 	}
 
+	if isDeleted {
+		return "", domain.ErrFoundDeleted
+	}
+
 	return original, nil
 }
 
-/* -------------------------------------------------------------------------- */
+func (r *PostgresStorage) GetByUser(ctx context.Context, userID string) (data map[string]string, err error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("repo: get aborted: %w", err)
+	}
+
+	queryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	query := `
+		SELECT alias, original, is_deleted
+		FROM urls
+		WHERE user_id = $1;
+	`
+
+	rows, err := r.pool.Query(queryCtx, query, userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("repo: database error: %w", err)
+	}
+	defer rows.Close()
+
+	data = make(map[string]string)
+	for rows.Next() {
+		var k, v string
+		var isDeleted bool
+
+		err := rows.Scan(&k, &v, &isDeleted)
+		if err != nil {
+			return nil, fmt.Errorf("repo: database error: %w", err)
+		}
+
+		if !isDeleted {
+			data[k] = v
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repo: database error: %w", err)
+	}
+
+	return data, nil
+}
+
 func (r *PostgresStorage) Close() error {
 	r.pool.Close()
 	return nil
 }
 
-/* -------------------------------------------------------------------------- */
 func (r *PostgresStorage) Ping(ctx context.Context) error {
 	return r.pool.Ping(ctx)
+}
+
+func (r *PostgresStorage) DeleteBatch(ctx context.Context, batch map[string][]string) error {
+	if len(batch) == 0 {
+		return nil
+	}
+
+	var userIDs []string
+	var aliases []string
+
+	for userID, userAliases := range batch {
+		for _, alias := range userAliases {
+			userIDs = append(userIDs, userID)
+			aliases = append(aliases, alias)
+		}
+	}
+
+	query := `
+		UPDATE urls AS u
+		SET is_deleted = true
+		FROM (
+			SELECT unnest($1::uuid[]) AS user_id, unnest($2::varchar[]) AS alias
+		) AS data
+		WHERE u.user_id = data.user_id
+		  AND u.alias = data.alias
+		  AND u.is_deleted = false;
+	`
+
+	_, err := r.pool.Exec(ctx, query, userIDs, aliases)
+	if err != nil {
+		return fmt.Errorf("repository: failed to execute batch update: %w", err)
+	}
+
+	return nil
 }

@@ -15,6 +15,7 @@ type Config struct {
 	StorageFile   string `env:"FILE_STORAGE_PATH"`
 	DatabaseDSN   string `env:"DATABASE_DSN"`
 	NoDBMigration bool   `env:"NO_DB_MIGRATION"`
+	JWTSecret     string `env:"JWT_SECRET"`
 }
 
 /* -------------------------------------------------------------------------- */
@@ -26,6 +27,7 @@ func New(args []string) (*Config, error) {
 		StorageFile:   "",
 		DatabaseDSN:   "",
 		NoDBMigration: false,
+		JWTSecret:     "",
 	}
 
 	// Flags overwrite default values
@@ -53,6 +55,11 @@ func New(args []string) (*Config, error) {
 	}
 	cfg.BaseURL = strings.TrimSuffix(cfg.BaseURL, "/")
 
+	// Validating JWT secret
+	if cfg.JWTSecret == "" {
+		return nil, fmt.Errorf("JWT secret not set")
+	}
+
 	return &cfg, nil
 }
 
@@ -79,4 +86,9 @@ func (c *Config) GetDatabaseDSN() string {
 /* -------------------------------------------------------------------------- */
 func (c *Config) GetNoDBMigration() bool {
 	return c.NoDBMigration
+}
+
+/* -------------------------------------------------------------------------- */
+func (c *Config) GetJWTSecret() string {
+	return c.JWTSecret
 }

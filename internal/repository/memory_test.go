@@ -9,6 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	userID = "username"
+)
+
 func TestMemStorage(t *testing.T) {
 	repo := NewMemStorage()
 	ctx := context.Background()
@@ -17,7 +21,7 @@ func TestMemStorage(t *testing.T) {
 		alias := "test1"
 		original := "http://example1.com"
 
-		res, err := repo.Save(ctx, alias, original)
+		res, err := repo.Save(ctx, alias, original, userID)
 		assert.NoError(t, err)
 		assert.Equal(t, alias, res)
 
@@ -29,10 +33,10 @@ func TestMemStorage(t *testing.T) {
 	t.Run("Duplicate Alias", func(t *testing.T) {
 		alias := "dup"
 
-		_, err := repo.Save(ctx, alias, "http://example2.com")
+		_, err := repo.Save(ctx, alias, "http://example2.com", userID)
 		assert.NoError(t, err)
 
-		_, err = repo.Save(ctx, alias, "http://another.com")
+		_, err = repo.Save(ctx, alias, "http://another.com", userID)
 		assert.ErrorIs(t, err, domain.ErrAliasDuplicate)
 	})
 
@@ -40,12 +44,12 @@ func TestMemStorage(t *testing.T) {
 		alias1 := "alias1"
 		original := "http://example3.com"
 
-		res1, err := repo.Save(ctx, alias1, original)
+		res1, err := repo.Save(ctx, alias1, original, userID)
 		assert.NoError(t, err)
 		assert.Equal(t, alias1, res1)
 
 		alias2 := "alias2"
-		res2, err := repo.Save(ctx, alias2, original)
+		res2, err := repo.Save(ctx, alias2, original, userID)
 		assert.ErrorIs(t, err, domain.ErrOriginalURLDuplicate)
 		// Должен вернуть существующий alias1
 		assert.Equal(t, alias1, res2)
@@ -61,7 +65,7 @@ func TestMemStorage(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		_, err := repo.Save(ctx, "a", "b")
+		_, err := repo.Save(ctx, "a", "b", userID)
 		assert.ErrorContains(t, err, "repo: save aborted")
 	})
 
@@ -71,7 +75,7 @@ func TestMemStorage(t *testing.T) {
 			"http://batch2.com": "b2",
 		}
 
-		written, err := repo.SaveBatch(ctx, batch)
+		written, err := repo.SaveBatch(ctx, batch, userID)
 		assert.NoError(t, err)
 		assert.Len(t, written, 2)
 		assert.Equal(t, "b1", written["http://batch1.com"])
@@ -85,7 +89,7 @@ func TestMemStorage(t *testing.T) {
 	})
 
 	t.Run("SaveBatch with existing alias in cache", func(t *testing.T) {
-		_, err := repo.Save(ctx, "existingAlias", "http://existing.com")
+		_, err := repo.Save(ctx, "existingAlias", "http://existing.com", userID)
 		require.NoError(t, err)
 
 		batch := map[string]string{
@@ -93,7 +97,7 @@ func TestMemStorage(t *testing.T) {
 			"http://new2.com": "existingAlias", // Conflict with existing
 		}
 
-		written, err := repo.SaveBatch(ctx, batch)
+		written, err := repo.SaveBatch(ctx, batch, userID)
 		assert.ErrorIs(t, err, domain.ErrAliasDuplicate)
 		assert.Nil(t, written) // No partial write
 
@@ -108,7 +112,7 @@ func TestMemStorage(t *testing.T) {
 			"http://url2.com": "sameAlias", // Collision within batch
 		}
 
-		written, err := repo.SaveBatch(ctx, batch)
+		written, err := repo.SaveBatch(ctx, batch, userID)
 		assert.ErrorIs(t, err, domain.ErrAliasDuplicate)
 		assert.Nil(t, written) // No partial write
 
@@ -118,7 +122,7 @@ func TestMemStorage(t *testing.T) {
 	})
 
 	t.Run("SaveBatch with existing original URL", func(t *testing.T) {
-		_, err := repo.Save(ctx, "firstAlias", "http://original.com")
+		_, err := repo.Save(ctx, "firstAlias", "http://original.com", userID)
 		require.NoError(t, err)
 
 		batch := map[string]string{
@@ -126,7 +130,7 @@ func TestMemStorage(t *testing.T) {
 			"http://original.com": "anotherAlias", // Conflict with existing original
 		}
 
-		written, err := repo.SaveBatch(ctx, batch)
+		written, err := repo.SaveBatch(ctx, batch, userID)
 		assert.ErrorIs(t, err, domain.ErrOriginalURLDuplicate)
 		assert.NotNil(t, written) // Partial success for non-conflicting items
 		assert.Len(t, written, 2)
@@ -150,7 +154,7 @@ func TestMemStorage(t *testing.T) {
 			"http://test.com": "t1",
 		}
 
-		written, err := repo.SaveBatch(ctx, batch)
+		written, err := repo.SaveBatch(ctx, batch, userID)
 		assert.ErrorContains(t, err, "repo: batch save aborted")
 		assert.Nil(t, written)
 	})

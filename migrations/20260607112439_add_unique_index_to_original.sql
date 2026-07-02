@@ -1,5 +1,9 @@
 -- +goose Up
-CREATE UNIQUE INDEX idx_urls_unique_original ON urls(original);
+-- +goose StatementBegin
+ALTER TABLE urls ADD CONSTRAINT uq_urls_original UNIQUE (original);
+-- +goose StatementEnd
 
 -- +goose Down
-DROP INDEX IF EXISTS idx_urls_unique_original;
+-- +goose StatementBegin
+ALTER TABLE urls DROP CONSTRAINT IF EXISTS uq_urls_original;
+-- +goose StatementEnd
