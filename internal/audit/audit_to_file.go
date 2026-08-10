@@ -59,6 +59,7 @@ func (s *AuditToFile) Run(ctx context.Context) {
 			s.log.Error().
 				Err(ctx.Err()).
 				Msg("audit: file: stopped by context")
+			return
 		case event, ok := <-s.queue:
 			if !ok {
 				return

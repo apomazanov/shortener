@@ -25,13 +25,13 @@ func handleCookie(c *echo.Context, jwt JWT) *cookieData {
 
 	result.exists, ok = extractCookieExistsFromCtx(c)
 	if !ok {
-		result.err = fmt.Errorf("Failed extracting cookie-exists from context")
+		result.err = fmt.Errorf("failed extracting cookie-exists from context")
 		return &result
 	}
 
 	result.userID, ok = extractUserIDFromCtx(c)
 	if !ok {
-		result.err = fmt.Errorf("Failed extracting user-id from context")
+		result.err = fmt.Errorf("failed extracting user-id from context")
 		return &result
 	}
 
@@ -45,7 +45,7 @@ func handleCookie(c *echo.Context, jwt JWT) *cookieData {
 		var err error
 		result.newCookie, err = jwt.CreateCookieWithUserID(result.newUserID)
 		if err != nil {
-			result.err = fmt.Errorf("Cookie creation failed: %w", err)
+			result.err = fmt.Errorf("cookie creation failed: %w", err)
 			return &result
 		}
 	}

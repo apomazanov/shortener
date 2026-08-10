@@ -136,8 +136,8 @@ func run(log *zerolog.Logger) error {
 	e.GET("/ping", h.Ping)
 	e.GET("/api/user/urls", h.GetUserURLs, authMiddleware)
 	e.POST("/", h.CreateText, authMiddleware, auditMiddleware)
-	e.POST("/api/shorten", h.CreateJson, authMiddleware, auditMiddleware)
-	e.POST("/api/shorten/batch", h.CreateJsonBatch, authMiddleware)
+	e.POST("/api/shorten", h.CreateJSON, authMiddleware, auditMiddleware)
+	e.POST("/api/shorten/batch", h.CreateJSONBatch, authMiddleware)
 	e.DELETE("/api/user/urls", h.DeleteUserURLsByAlias, authMiddleware)
 	e.RouteNotFound("/*", h.Reject)
 

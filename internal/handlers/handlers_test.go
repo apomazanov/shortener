@@ -802,7 +802,7 @@ func TestHandler_CreateJson(t *testing.T) {
 				tt.mocksSetup(m)
 			}
 
-			err := h.CreateJson(tcx.ctx)
+			err := h.CreateJSON(tcx.ctx)
 
 			if tt.expectedErr != nil {
 				require.Error(t, err)
@@ -1135,7 +1135,7 @@ func TestHandler_CreateJsonBatch(t *testing.T) {
 				tt.mocksSetup(m)
 			}
 
-			err := h.CreateJsonBatch(tcx.ctx)
+			err := h.CreateJSONBatch(tcx.ctx)
 
 			if tt.expectedErr != nil {
 				require.Error(t, err)

@@ -234,11 +234,6 @@ func (h *Handler) CreateText(c *echo.Context) error {
 	// Casting body to string, validating
 	requestData := jsonShortenRequest{URL: string(body)}
 	if err := c.Validate(&requestData); err != nil {
-		log.Info().
-			Err(err).
-			Any("request_data", requestData).
-			Msg("invalid request data")
-
 		return echo.ErrBadRequest
 	}
 
@@ -271,15 +266,15 @@ func (h *Handler) CreateText(c *echo.Context) error {
 	c.Set("original", requestData.URL)
 
 	// base URL already validated during config
-	shortUrl := h.cfg.GetURLBase() + "/" + alias
-	return c.String(responseStatus, shortUrl)
+	shortURL := h.cfg.GetURLBase() + "/" + alias
+	return c.String(responseStatus, shortURL)
 }
 
-func (h *Handler) CreateJson(c *echo.Context) error {
+func (h *Handler) CreateJSON(c *echo.Context) error {
 	var requestData jsonShortenRequest
 	var responseData jsonShortenResponse
 
-	log := h.log.With().Str("op", "handler.CreateJson").Logger()
+	log := h.log.With().Str("op", "handler.CreateJSON").Logger()
 
 	// Cookie
 
@@ -302,20 +297,11 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 
 	// Reading body
 	if err := c.Bind(&requestData); err != nil {
-		log.Info().
-			Err(err).
-			Msg("failed to read request body")
-
 		return echo.ErrBadRequest
 	}
 
 	// Validating
 	if err := c.Validate(&requestData); err != nil {
-		log.Info().
-			Err(err).
-			Any("request_data", requestData).
-			Msg("invalid request data")
-
 		return echo.ErrBadRequest
 	}
 
@@ -350,9 +336,9 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 	return c.JSON(responseStatus, responseData)
 }
 
-func (h *Handler) CreateJsonBatch(c *echo.Context) error {
+func (h *Handler) CreateJSONBatch(c *echo.Context) error {
 
-	log := h.log.With().Str("op", "handler.CreateJsonBatch").Logger()
+	log := h.log.With().Str("op", "handler.CreateJSONBatch").Logger()
 
 	// Cookie
 
@@ -377,10 +363,6 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 	var requestData []jsonBatchRequestItem
 
 	if err := c.Bind(&requestData); err != nil {
-		log.Info().
-			Err(err).
-			Msg("failed to read request body")
-
 		return echo.ErrBadRequest
 	}
 
@@ -390,11 +372,6 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 	for _, item := range requestData {
 
 		if err := c.Validate(&item); err != nil {
-			log.Info().
-				Err(err).
-				Any("request_item", item).
-				Msg("invalid request data")
-
 			return echo.ErrBadRequest
 		}
 	}
@@ -474,26 +451,15 @@ func (h *Handler) DeleteUserURLsByAlias(c *echo.Context) error {
 
 	// Reading body
 	if err := c.Bind(&aliases); err != nil {
-		log.Info().
-			Err(err).
-			Msg("failed to read request body")
-
 		return echo.ErrBadRequest
 	}
 
 	// Validating
 	if len(aliases) == 0 {
-		log.Info().
-			Msg("empty request data")
-
 		return echo.ErrBadRequest
 	}
 	for _, alias := range aliases {
 		if len(alias) != aliasSize {
-			log.Info().
-				Str("alias", alias).
-				Msg("invalid alias")
-
 			return echo.ErrBadRequest
 		}
 	}
