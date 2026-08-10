@@ -14,7 +14,7 @@ import (
 
 const aliasSize = 6
 
-//go:generate mockgen -destination=mocks/mock_business.go -package=mocks github.com/apomazanov/shortener/internal/handlers BusinessService
+//go:generate mockgen -destination=mocks/mock_business.gen.go -package=mocks github.com/apomazanov/shortener/internal/handlers BusinessService
 type BusinessService interface {
 	GetOriginalURL(ctx context.Context, alias string) (original string, err error)
 	GetUserURLs(ctx context.Context, userID string) (data map[string]string, err error)
@@ -23,17 +23,17 @@ type BusinessService interface {
 	DeleteUserURLs(ctx context.Context, userID string, aliases []string) error
 }
 
-//go:generate mockgen -destination=mocks/mock_health.go -package=mocks github.com/apomazanov/shortener/internal/handlers HealthService
+//go:generate mockgen -destination=mocks/mock_health.gen.go -package=mocks github.com/apomazanov/shortener/internal/handlers HealthService
 type HealthService interface {
 	Ping(ctx context.Context) error
 }
 
-//go:generate mockgen -destination=mocks/mock_config.go -package=mocks github.com/apomazanov/shortener/internal/handlers URLConfig
+//go:generate mockgen -destination=mocks/mock_config.gen.go -package=mocks github.com/apomazanov/shortener/internal/handlers URLConfig
 type URLConfig interface {
 	GetURLBase() string
 }
 
-//go:generate mockgen -destination=mocks/mock_JWT.go -package=mocks github.com/apomazanov/shortener/internal/handlers JWT
+//go:generate mockgen -destination=mocks/mock_JWT.gen.go -package=mocks github.com/apomazanov/shortener/internal/handlers JWT
 type JWT interface {
 	CreateCookieWithUserID(userID string) (*http.Cookie, error)
 }
@@ -101,6 +101,7 @@ func (h *Handler) Get(c *echo.Context) error {
 	original, err := h.business.GetOriginalURL(ctx, alias)
 
 	if err == nil {
+		c.Set("original", original)
 		// Return original URL with redirection
 		return c.Redirect(http.StatusTemporaryRedirect, original)
 	}
@@ -264,7 +265,10 @@ func (h *Handler) CreateText(c *echo.Context) error {
 	// Cookie created for new users (user-id missing in ctx or invalid)
 	if !cookie.valid {
 		c.SetCookie(cookie.newCookie)
+		c.Set("user-id", userID)
 	}
+
+	c.Set("original", requestData.URL)
 
 	// base URL already validated during config
 	shortUrl := h.cfg.GetURLBase() + "/" + alias
@@ -336,7 +340,10 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 	// Cookie created for new users (user-id missing in ctx or invalid)
 	if !cookie.valid {
 		c.SetCookie(cookie.newCookie)
+		c.Set("user-id", userID)
 	}
+
+	c.Set("original", requestData.URL)
 
 	// Sending back short URL
 	responseData.Result, _ = url.JoinPath(h.cfg.GetURLBase(), alias)
@@ -435,6 +442,7 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 	// Cookie created for new users (user-id missing in ctx or invalid)
 	if !cookie.valid {
 		c.SetCookie(cookie.newCookie)
+		c.Set("user-id", userID)
 	}
 
 	return c.JSON(responseStatus, responseData)

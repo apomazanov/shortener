@@ -11,7 +11,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-//go:generate mockgen -destination=mocks/mock_repo.go -package=mocks github.com/apomazanov/shortener/internal/service Repo
+//go:generate mockgen -destination=mocks/mock_repo.gen.go -package=mocks github.com/apomazanov/shortener/internal/service Repo
 type Repo interface {
 	Save(ctx context.Context, alias string, original string, userID string) (usedAlias string, err error)
 	SaveBatch(ctx context.Context, toWrite map[string]string, userID string) (written map[string]string, err error)

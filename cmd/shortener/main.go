@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -14,10 +15,10 @@ import (
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/rs/zerolog"
 
+	"github.com/apomazanov/shortener/internal/audit"
 	"github.com/apomazanov/shortener/internal/config"
 	"github.com/apomazanov/shortener/internal/handlers"
 	"github.com/apomazanov/shortener/internal/repository"
-	"github.com/apomazanov/shortener/internal/routes"
 	"github.com/apomazanov/shortener/internal/service"
 	"github.com/apomazanov/shortener/internal/validator"
 	"github.com/apomazanov/shortener/pkg/logger"
@@ -87,6 +88,34 @@ func run(log *zerolog.Logger) error {
 	e := echo.New()
 	e.Validator = validator.New()
 
+	// Audit
+
+	auditCtx, auditCancel := context.WithCancel(context.Background())
+	defer auditCancel()
+
+	var wgAudit sync.WaitGroup
+
+	auditor := audit.NewDispatcher(log)
+	wgAudit.Go(func() {
+		auditor.Run(auditCtx)
+	})
+
+	if cfg.GetAuditFile() != "" {
+		auditToFile := audit.NewAuditToFile(cfg.GetAuditFile(), log)
+		auditor.Register(auditToFile)
+		wgAudit.Go(func() {
+			auditToFile.Run(auditCtx)
+		})
+	}
+
+	if cfg.GetAuditURL() != "" {
+		auditToURL := audit.NewAuditToURL(cfg.GetAuditURL(), log)
+		auditor.Register(auditToURL)
+		wgAudit.Go(func() {
+			auditToURL.Run(auditCtx)
+		})
+	}
+
 	// Middleware
 
 	e.Use(middleware.Recover())          // always first to catch all following panics
@@ -99,10 +128,18 @@ func run(log *zerolog.Logger) error {
 	e.Use(middleware.BodyLimit(5_242_880)) // 5 Mb, avoiding OOM killer
 
 	authMiddleware := my_middleware.Authenticator(&jwtData, log)
+	auditMiddleware := my_middleware.AuditRecorder(auditor.InputChannel(), log)
 
 	// Routes
 
-	routes.Setup(e, h, authMiddleware)
+	e.GET("/:alias", h.Get, auditMiddleware)
+	e.GET("/ping", h.Ping)
+	e.GET("/api/user/urls", h.GetUserURLs, authMiddleware)
+	e.POST("/", h.CreateText, authMiddleware, auditMiddleware)
+	e.POST("/api/shorten", h.CreateJson, authMiddleware, auditMiddleware)
+	e.POST("/api/shorten/batch", h.CreateJsonBatch, authMiddleware)
+	e.DELETE("/api/user/urls", h.DeleteUserURLsByAlias, authMiddleware)
+	e.RouteNotFound("/*", h.Reject)
 
 	// Graceful shutdown
 
@@ -114,7 +151,17 @@ func run(log *zerolog.Logger) error {
 		GracefulTimeout: 10 * time.Second,
 	}
 
-	return sc.Start(ctx, e)
+	err = sc.Start(ctx, e) // blocking, HTTP-server running
+
+	// HTTP-server gracefully shut down, ready to disable audit services
+	time.AfterFunc(10*time.Second, func() {
+		// emergency shutdown in case of stuck
+		auditCancel()
+	})
+	auditor.Stop()
+	wgAudit.Wait()
+
+	return err
 }
 
 func main() {
