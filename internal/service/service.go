@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
-	"strings"
 
 	"github.com/apomazanov/shortener/internal/domain"
 	"github.com/rs/zerolog"
@@ -39,15 +38,13 @@ func (s *Service) newAlias() string {
 		aliasLen = 6
 	)
 
-	var alias strings.Builder
-	alias.Grow(aliasLen)
+	var buf [aliasLen]byte
 
-	for range aliasLen {
-		idx := rand.IntN(len(alphabet))
-		alias.WriteByte(alphabet[idx])
+	for i := range buf {
+		buf[i] = alphabet[rand.IntN(len(alphabet))]
 	}
 
-	return alias.String()
+	return string(buf[:])
 }
 
 func (s *Service) GetOriginalURL(ctx context.Context, alias string) (original string, err error) {

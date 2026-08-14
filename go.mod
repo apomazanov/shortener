@@ -13,6 +13,7 @@ require (
 	github.com/hashicorp/go-retryablehttp v0.7.8
 	github.com/jackc/pgerrcode v0.0.0-20250907135507-afb5586c32a6
 	github.com/jackc/pgx/v5 v5.9.2
+	github.com/labstack/echo-contrib/v5 v5.0.1
 	github.com/pashagolub/pgxmock/v3 v3.4.0
 	github.com/pressly/goose/v3 v3.27.1
 	github.com/rs/zerolog v1.35.1

@@ -81,8 +81,6 @@ func New(b BusinessService, c URLConfig, l *zerolog.Logger, h HealthService, j J
 
 func (h *Handler) Get(c *echo.Context) error {
 
-	log := h.log.With().Str("op", "handler.Get").Logger()
-
 	// Raw context for deeper layers, evading 'echo' dependency
 	ctx := c.Request().Context()
 
@@ -90,7 +88,8 @@ func (h *Handler) Get(c *echo.Context) error {
 	alias := c.Param("alias")
 
 	if len(alias) != aliasSize {
-		log.Info().
+		h.log.Info().
+			Str("op", "handler.Get").
 			Str("alias", alias).
 			Msg("invalid alias")
 
@@ -111,14 +110,16 @@ func (h *Handler) Get(c *echo.Context) error {
 	}
 
 	if errors.Is(err, domain.ErrNotFound) {
-		log.Info().
+		h.log.Info().
+			Str("op", "handler.Get").
 			Err(err).
 			Msg("alias not found")
 
 		return echo.ErrNotFound
 	}
 
-	log.Error().
+	h.log.Error().
+		Str("op", "handler.Get").
 		Err(err).
 		Msg("something went wrong")
 
@@ -127,8 +128,6 @@ func (h *Handler) Get(c *echo.Context) error {
 
 func (h *Handler) GetUserURLs(c *echo.Context) error {
 
-	log := h.log.With().Str("op", "handler.GetUserURLs").Logger()
-
 	// Raw context for deeper layers, evading 'echo' dependency
 	ctx := c.Request().Context()
 
@@ -136,7 +135,8 @@ func (h *Handler) GetUserURLs(c *echo.Context) error {
 
 	cookieData := handleCookie(c, h.JWT)
 	if cookieData.err != nil {
-		log.Error().
+		h.log.Error().
+			Str("op", "handler.GetUserURLs").
 			Err(cookieData.err).
 			Msg("Failed cookie handling")
 
@@ -161,7 +161,8 @@ func (h *Handler) GetUserURLs(c *echo.Context) error {
 			return c.NoContent(http.StatusNoContent)
 		}
 
-		log.Error().
+		h.log.Error().
+			Str("op", "handler.GetUserURLs").
 			Err(err).
 			Msg("something went wrong")
 
@@ -182,13 +183,12 @@ func (h *Handler) GetUserURLs(c *echo.Context) error {
 
 func (h *Handler) Ping(c *echo.Context) error {
 
-	log := h.log.With().Str("op", "handler.Ping").Logger()
-
 	ctx := c.Request().Context()
 
 	if err := h.health.Ping(ctx); err != nil {
 
-		log.Error().
+		h.log.Error().
+			Str("op", "handler.Ping").
 			Err(err).
 			Msg("health check failed")
 
@@ -200,13 +200,12 @@ func (h *Handler) Ping(c *echo.Context) error {
 
 func (h *Handler) CreateText(c *echo.Context) error {
 
-	log := h.log.With().Str("op", "handler.CreateText").Logger()
-
 	// Cookie
 
 	cookie := handleCookie(c, h.JWT)
 	if cookie.err != nil {
-		log.Error().
+		h.log.Error().
+			Str("op", "handler.CreateText").
 			Err(cookie.err).
 			Msg("Failed cookie handling")
 
@@ -224,7 +223,8 @@ func (h *Handler) CreateText(c *echo.Context) error {
 	// Reading body, expecting long URL for shortening
 	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
-		log.Info().
+		h.log.Info().
+			Str("op", "handler.CreateText").
 			Err(err).
 			Msg("failed to read request body")
 
@@ -246,7 +246,8 @@ func (h *Handler) CreateText(c *echo.Context) error {
 		if errors.Is(err, domain.ErrOriginalURLDuplicate) {
 			responseStatus = http.StatusConflict
 		} else {
-			log.Error().
+			h.log.Error().
+				Str("op", "handler.CreateText").
 				Err(err).
 				Str("alias", alias).
 				Msg("alias creation failed")
@@ -274,13 +275,12 @@ func (h *Handler) CreateJSON(c *echo.Context) error {
 	var requestData jsonShortenRequest
 	var responseData jsonShortenResponse
 
-	log := h.log.With().Str("op", "handler.CreateJSON").Logger()
-
 	// Cookie
 
 	cookie := handleCookie(c, h.JWT)
 	if cookie.err != nil {
-		log.Error().
+		h.log.Error().
+			Str("op", "handler.CreateJSON").
 			Err(cookie.err).
 			Msg("Failed cookie handling")
 
@@ -314,7 +314,8 @@ func (h *Handler) CreateJSON(c *echo.Context) error {
 		if errors.Is(err, domain.ErrOriginalURLDuplicate) {
 			responseStatus = http.StatusConflict
 		} else {
-			log.Error().
+			h.log.Error().
+				Str("op", "handler.CreateJSON").
 				Err(err).
 				Str("alias", alias).
 				Msg("alias creation failed")
@@ -332,19 +333,18 @@ func (h *Handler) CreateJSON(c *echo.Context) error {
 	c.Set("original", requestData.URL)
 
 	// Sending back short URL
-	responseData.Result, _ = url.JoinPath(h.cfg.GetURLBase(), alias)
+	responseData.Result = h.cfg.GetURLBase() + "/" + alias
 	return c.JSON(responseStatus, responseData)
 }
 
 func (h *Handler) CreateJSONBatch(c *echo.Context) error {
 
-	log := h.log.With().Str("op", "handler.CreateJSONBatch").Logger()
-
 	// Cookie
 
 	cookie := handleCookie(c, h.JWT)
 	if cookie.err != nil {
-		log.Error().
+		h.log.Error().
+			Str("op", "handler.CreateJSONBatch").
 			Err(cookie.err).
 			Msg("Failed cookie handling")
 
@@ -393,7 +393,8 @@ func (h *Handler) CreateJSONBatch(c *echo.Context) error {
 		if errors.Is(err, domain.ErrOriginalURLDuplicate) {
 			responseStatus = http.StatusConflict
 		} else {
-			log.Error().
+			h.log.Error().
+				Str("op", "handler.CreateJSONBatch").
 				Err(err).
 				Msg("alias creation failed")
 
@@ -426,7 +427,6 @@ func (h *Handler) CreateJSONBatch(c *echo.Context) error {
 }
 
 func (h *Handler) DeleteUserURLsByAlias(c *echo.Context) error {
-	log := h.log.With().Str("op", "handler.DeleteUserURLs").Logger()
 
 	// Raw context for deeper layers, evading 'echo' dependency
 	ctx := c.Request().Context()
@@ -435,7 +435,8 @@ func (h *Handler) DeleteUserURLsByAlias(c *echo.Context) error {
 
 	cookie := handleCookie(c, h.JWT)
 	if cookie.err != nil {
-		log.Error().
+		h.log.Error().
+			Str("op", "handler.DeleteUserURLs").
 			Err(cookie.err).
 			Msg("Failed cookie handling")
 
@@ -468,7 +469,8 @@ func (h *Handler) DeleteUserURLsByAlias(c *echo.Context) error {
 	err := h.business.DeleteUserURLs(ctx, cookie.userID, aliases)
 	if err != nil {
 
-		log.Error().
+		h.log.Error().
+			Str("op", "handler.DeleteUserURLs").
 			Err(err).
 			Msg("something went wrong")
 
