@@ -40,7 +40,7 @@ type ctxOptions struct {
 	contentType string
 }
 
-func createMocksAndHandler(t *testing.T) (m *mocksContainer, h *Handler) {
+func createMocksAndHandler(t testing.TB) (m *mocksContainer, h *Handler) {
 	t.Helper()
 
 	c := gomock.NewController(t)
@@ -56,7 +56,7 @@ func createMocksAndHandler(t *testing.T) (m *mocksContainer, h *Handler) {
 	return m, h
 }
 
-func createCtx(t *testing.T, opts *ctxOptions) *testContext {
+func createCtx(t testing.TB, opts *ctxOptions) *testContext {
 	t.Helper()
 
 	e := echo.New()
@@ -1327,5 +1327,166 @@ func TestHandler_DeleteUserURLsByAlias(t *testing.T) {
 
 			assert.Equal(t, tt.expectedStatus, tcx.res.Code)
 		})
+	}
+}
+
+func BenchmarkGet(b *testing.B) {
+	const validAlias = "abcdef"
+
+	m, h := createMocksAndHandler(b)
+
+	m.service.EXPECT().
+		GetOriginalURL(gomock.Any(), validAlias).
+		Return("http://example.com/original", nil).
+		AnyTimes()
+
+	tcx := createCtx(b, &ctxOptions{
+		method: http.MethodGet,
+		alias:  validAlias,
+	})
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for b.Loop() {
+		res := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/"+validAlias, nil)
+
+		tcx.ctx.Reset(req, res)
+		tcx.ctx.SetPath("/:alias")
+		tcx.ctx.SetPathValues(echo.PathValues{
+			{Name: "alias", Value: validAlias},
+		})
+
+		err := h.Get(tcx.ctx)
+
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		if res.Code != http.StatusTemporaryRedirect {
+			b.Fatalf("unexpected status: %d", res.Code)
+		}
+	}
+}
+
+func BenchmarkCreateText(b *testing.B) {
+	const (
+		validUserID = "123e4567-e89b-42d3-a456-426614174000"
+		validURL    = "http://example.com/original"
+		baseURL     = "http://shortener"
+		alias       = "abcdef"
+	)
+
+	m, h := createMocksAndHandler(b)
+
+	m.service.EXPECT().
+		CreateURLAlias(gomock.Any(), validURL, validUserID).
+		Return(alias, nil).
+		AnyTimes()
+
+	m.config.EXPECT().
+		GetURLBase().
+		Return(baseURL).
+		AnyTimes()
+
+	tcx := createCtx(b, &ctxOptions{
+		method: http.MethodPost,
+		userID: validUserID,
+		body:   validURL,
+	})
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	expectedBody := baseURL + "/" + alias
+
+	for b.Loop() {
+		res := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(validURL))
+
+		tcx.ctx.Reset(req, res)
+		tcx.ctx.Set("user-id", validUserID)
+		tcx.ctx.Set("cookie-exists", true)
+
+		err := h.CreateText(tcx.ctx)
+
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		if res.Code != http.StatusCreated {
+			b.Fatalf("unexpected status: %d", res.Code)
+		}
+
+		if res.Body.String() != expectedBody {
+			b.Fatalf("unexpected body: %s", res.Body.String())
+		}
+	}
+}
+
+func BenchmarkCreateJSON(b *testing.B) {
+	const (
+		validUserID = "123e4567-e89b-42d3-a456-426614174000"
+		validURL    = "http://example.com/original"
+		baseURL     = "http://shortener"
+		alias       = "abcdef"
+	)
+
+	m, h := createMocksAndHandler(b)
+
+	m.service.EXPECT().
+		CreateURLAlias(gomock.Any(), validURL, validUserID).
+		Return(alias, nil).
+		AnyTimes()
+
+	m.config.EXPECT().
+		GetURLBase().
+		Return(baseURL).
+		AnyTimes()
+
+	tcx := createCtx(b, &ctxOptions{
+		method:      http.MethodPost,
+		userID:      validUserID,
+		body:        `{"url":"` + validURL + `"}`,
+		contentType: echo.MIMEApplicationJSON,
+	})
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	var decoded jsonShortenResponse
+	if err := json.Unmarshal([]byte(`{"result":"`+baseURL+"/"+alias+`"}`), &decoded); err != nil {
+		b.Fatal(err)
+	}
+	expectedResult := decoded.Result
+
+	for b.Loop() {
+		res := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"url":"`+validURL+`"}`))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+
+		tcx.ctx.Reset(req, res)
+		tcx.ctx.Set("user-id", validUserID)
+		tcx.ctx.Set("cookie-exists", true)
+
+		err := h.CreateJSON(tcx.ctx)
+
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		if res.Code != http.StatusCreated {
+			b.Fatalf("unexpected status: %d", res.Code)
+		}
+
+		var received jsonShortenResponse
+		if err := json.Unmarshal(res.Body.Bytes(), &received); err != nil {
+			b.Fatal(err)
+		}
+
+		if received.Result != expectedResult {
+			b.Fatalf("unexpected result: %s", received.Result)
+		}
 	}
 }
