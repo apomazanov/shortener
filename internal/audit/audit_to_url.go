@@ -15,13 +15,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// AuditToURL contains data for sending audit events to URL server.
 type AuditToURL struct {
-	queue      chan domain.AuditEvent
-	log        *zerolog.Logger
-	url        string
+	// queue input channel with events queue.
+	queue chan domain.AuditEvent
+	// log is a pointer to system logger.
+	log *zerolog.Logger
+	// url is a remote URL address of events receiver.
+	url string
+	// httpClient is a http-client pointer for send operation.
 	httpClient *http.Client
 }
 
+// NewAuditToURL creates a new audit-to-server subscriber object.
 func NewAuditToURL(URL string, log *zerolog.Logger) *AuditToURL {
 
 	retryClient := retryablehttp.NewClient()
@@ -40,10 +46,12 @@ func NewAuditToURL(URL string, log *zerolog.Logger) *AuditToURL {
 	}
 }
 
+// Ch returns subscriber's input channel.
 func (s *AuditToURL) Ch() chan<- domain.AuditEvent {
 	return s.queue
 }
 
+// Run provides continious queue monitoring and sending events to server.
 func (s *AuditToURL) Run(ctx context.Context) {
 
 	for {
@@ -67,6 +75,7 @@ func (s *AuditToURL) Run(ctx context.Context) {
 	}
 }
 
+// send provides send operation.
 func (s *AuditToURL) send(ctx context.Context, event domain.AuditEvent) error {
 
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)

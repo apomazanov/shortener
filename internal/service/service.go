@@ -10,6 +10,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// Repo interface declares repository methods needed for service functionality.
+//
 //go:generate mockgen -destination=mocks/mock_repo.gen.go -package=mocks github.com/apomazanov/shortener/internal/service Repo
 type Repo interface {
 	Save(ctx context.Context, alias string, original string, userID string) (usedAlias string, err error)
@@ -19,11 +21,15 @@ type Repo interface {
 	DeleteBatch(ctx context.Context, batch map[string][]string) error
 }
 
+// Service defines main business-logic data object.
 type Service struct {
-	repo    Repo
+	// repo contains repository methods needed for data operations.
+	repo Repo
+	// deleter is a pointer to async delete handler.
 	deleter *asyncDeleter
 }
 
+// New function returns a pointer to a new Service object.
 func New(repo Repo, asyncDeleterCfg *AsyncDeleterConfig, log *zerolog.Logger) *Service {
 	return &Service{
 		repo:    repo,
@@ -31,6 +37,7 @@ func New(repo Repo, asyncDeleterCfg *AsyncDeleterConfig, log *zerolog.Logger) *S
 	}
 }
 
+// newAlias creates a new randomly generated alias.
 func (s *Service) newAlias() string {
 
 	const (
@@ -47,6 +54,7 @@ func (s *Service) newAlias() string {
 	return string(buf[:])
 }
 
+// GetOriginalURL returns an original value of provided alias.
 func (s *Service) GetOriginalURL(ctx context.Context, alias string) (original string, err error) {
 	original, err = s.repo.Get(ctx, alias)
 
@@ -57,6 +65,8 @@ func (s *Service) GetOriginalURL(ctx context.Context, alias string) (original st
 	return original, err
 }
 
+// GetUserURLs returns a map of aliases and their original values, which were
+// created by provided user.
 func (s *Service) GetUserURLs(ctx context.Context, userID string) (data map[string]string, err error) {
 	data, err = s.repo.GetByUser(ctx, userID)
 
@@ -67,6 +77,8 @@ func (s *Service) GetUserURLs(ctx context.Context, userID string) (data map[stri
 	return data, err
 }
 
+// CreateURLAlias creates a new alias for provided original URL. New value
+// stored in repository, and new alias is returned.
 func (s *Service) CreateURLAlias(ctx context.Context, original string, userID string) (alias string, err error) {
 	const maxRetries = 5
 
@@ -91,6 +103,9 @@ func (s *Service) CreateURLAlias(ctx context.Context, original string, userID st
 	return "", fmt.Errorf("service: alias gen retry limit exceeded: %w", domain.ErrSaveRetryLimitExceeded)
 }
 
+// CreateURLAliasBatch creates a batch of aliases for provided batch of original
+// URLs. Original values are stored in repository, and batch of aliases is
+// returned.
 func (s *Service) CreateURLAliasBatch(ctx context.Context, originals []string, userID string) (writtenData map[string]string, err error) {
 	const maxRetries = 5
 
@@ -123,6 +138,8 @@ func (s *Service) CreateURLAliasBatch(ctx context.Context, originals []string, u
 	return nil, fmt.Errorf("service: batch of aliases gen retry limit exceeded: %w", domain.ErrSaveRetryLimitExceeded)
 }
 
+// DeleteUserURLs deletes all alias-original pairs created by provided user.
+// Delete operation is provided in async mode and can take a while.
 func (s *Service) DeleteUserURLs(ctx context.Context, userID string, aliases []string) error {
 	// ctx will be cancelled after response, not transiting it further
 	s.deleter.Enqueue(userID, aliases)

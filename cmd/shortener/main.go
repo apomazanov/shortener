@@ -139,7 +139,7 @@ func run(log *zerolog.Logger) error {
 	e.POST("/", h.CreateText, authMiddleware, auditMiddleware)
 	e.POST("/api/shorten", h.CreateJSON, authMiddleware, auditMiddleware)
 	e.POST("/api/shorten/batch", h.CreateJSONBatch, authMiddleware)
-	e.DELETE("/api/user/urls", h.DeleteUserURLsByAlias, authMiddleware)
+	e.DELETE("/api/user/urls", h.DeleteUserURLs, authMiddleware)
 	e.RouteNotFound("/*", h.Reject)
 
 	pprof.Register(e)

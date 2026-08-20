@@ -1,3 +1,4 @@
+// Package config defines types and methods for application configuration.
 package config
 
 import (
@@ -9,17 +10,27 @@ import (
 	"github.com/caarlos0/env/v11"
 )
 
+// Config contains application configuration parameters.
 type Config struct {
-	ServerAddr    string `env:"SERVER_ADDRESS"`
-	BaseURL       string `env:"BASE_URL"`
-	StorageFile   string `env:"FILE_STORAGE_PATH"`
-	DatabaseDSN   string `env:"DATABASE_DSN"`
-	NoDBMigration bool   `env:"NO_DB_MIGRATION"`
-	JWTSecret     string `env:"JWT_SECRET"`
-	AuditFile     string `env:"AUDIT_FILE"`
-	AuditURL      string `env:"AUDIT_URL"`
+	// ServerAddr is this app address.
+	ServerAddr string `env:"SERVER_ADDRESS"`
+	// BaseURL is a base URL for aliases.
+	BaseURL string `env:"BASE_URL"`
+	// StorageFile is a path to file for local storage.
+	StorageFile string `env:"FILE_STORAGE_PATH"`
+	// DatabaseDSN is a database connection path for PostgreSQL storage.
+	DatabaseDSN string `env:"DATABASE_DSN"`
+	// NoDBMigration is a flag for disabling migration process at application startup.
+	NoDBMigration bool `env:"NO_DB_MIGRATION"`
+	// JWTSecret is a string for JWT key.
+	JWTSecret string `env:"JWT_SECRET"`
+	// AuditFile is a path to file for local audit subscriber.
+	AuditFile string `env:"AUDIT_FILE"`
+	// AuditURL is an address of remote audit subscriber.
+	AuditURL string `env:"AUDIT_URL"`
 }
 
+// New creates a new config object.
 func New(args []string) (*Config, error) {
 
 	cfg := Config{
@@ -63,34 +74,42 @@ func New(args []string) (*Config, error) {
 	return &cfg, nil
 }
 
+// GetServerAddress returns value of 'ServerAddr' parameter.
 func (c *Config) GetServerAddress() string {
 	return c.ServerAddr
 }
 
+// GetURLBase returns value of 'BaseURL' parameter.
 func (c *Config) GetURLBase() string {
 	return c.BaseURL
 }
 
+// GetStorageFile returns value of 'StorageFile' parameter.
 func (c *Config) GetStorageFile() string {
 	return c.StorageFile
 }
 
+// GetDatabaseDSN returns value of 'DatabaseDSN' parameter.
 func (c *Config) GetDatabaseDSN() string {
 	return c.DatabaseDSN
 }
 
+// GetNoDBMigration returns value of 'NoDBMigration' parameter.
 func (c *Config) GetNoDBMigration() bool {
 	return c.NoDBMigration
 }
 
+// GetJWTSecret returns value of 'JWTSecret' parameter.
 func (c *Config) GetJWTSecret() string {
 	return c.JWTSecret
 }
 
+// GetAuditFile returns value of 'AuditFile' parameter.
 func (c *Config) GetAuditFile() string {
 	return c.AuditFile
 }
 
+// GetAuditURL returns value of 'AuditURL' parameter.
 func (c *Config) GetAuditURL() string {
 	return c.AuditURL
 }

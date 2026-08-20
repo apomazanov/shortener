@@ -1311,7 +1311,7 @@ func TestHandler_DeleteUserURLsByAlias(t *testing.T) {
 				tt.mocksSetup(m)
 			}
 
-			err := h.DeleteUserURLsByAlias(tcx.ctx)
+			err := h.DeleteUserURLs(tcx.ctx)
 
 			if tt.expectedErr != nil {
 				require.Error(t, err)

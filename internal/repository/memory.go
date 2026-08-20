@@ -9,15 +9,20 @@ import (
 	"github.com/apomazanov/shortener/internal/domain"
 )
 
+// MemStorage defines data for in-memory storage.
 type MemStorage struct {
-	mu    sync.RWMutex
+	// mu is a mutex for in-memory thread-safety.
+	mu sync.RWMutex
+	// cache contains aliases and original URLs.
 	cache map[string]string
 }
 
+// NewMemStorage creates a new MemStorage object.
 func NewMemStorage() *MemStorage {
 	return &MemStorage{cache: make(map[string]string)}
 }
 
+// Save provides write operation of single recoed to in-memory storage.
 func (r *MemStorage) Save(
 	ctx context.Context,
 	alias string,
@@ -52,6 +57,7 @@ func (r *MemStorage) Save(
 	return alias, nil
 }
 
+// SaveBatch provides write operation of batch of records to in-memory storage.
 func (r *MemStorage) SaveBatch(
 	ctx context.Context,
 	toWrite map[string]string,
@@ -108,6 +114,7 @@ MainLoop:
 	return written, nil
 }
 
+// Get provides a read operation of single record from in-memory storage.
 func (r *MemStorage) Get(ctx context.Context, alias string) (original string, err error) {
 	if err := ctx.Err(); err != nil {
 		return "", fmt.Errorf("repo: get aborted: %w", err)
@@ -124,18 +131,22 @@ func (r *MemStorage) Get(ctx context.Context, alias string) (original string, er
 	return "", domain.ErrNotFound
 }
 
+// GetByUser returns a list of aliases and original URLs stored by certain user.
 func (r *MemStorage) GetByUser(ctx context.Context, userID string) (data map[string]string, err error) {
 	return nil, domain.ErrNotFound
 }
 
+// Close correctly closes file object of in-memory storage.
 func (r *MemStorage) Close() error {
 	return nil
 }
 
+// Ping is used for detecting database availability.
 func (r *MemStorage) Ping(ctx context.Context) error {
 	return nil
 }
 
+// DeleteBatch provides delete operation for a batch of records from in-memory storage.
 func (r *MemStorage) DeleteBatch(ctx context.Context, batch map[string][]string) error {
 	return nil
 }

@@ -10,6 +10,8 @@ import (
 	my_jwt "github.com/apomazanov/shortener/internal/jwt"
 )
 
+// Authenticator provides authenticating of incoming requests. It monitors and
+// handles cookies and tokens.
 func Authenticator(jwtData *my_jwt.Data, log *zerolog.Logger) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {

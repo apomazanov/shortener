@@ -9,6 +9,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// AuditRecorder provides requests monitoring for audit service. It creates
+// audit events and sends them to audit manager.
 func AuditRecorder(events chan<- domain.AuditEvent, log *zerolog.Logger) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
@@ -45,6 +47,8 @@ func AuditRecorder(events chan<- domain.AuditEvent, log *zerolog.Logger) echo.Mi
 	}
 }
 
+// extractStringFromCtx is a helper for extracting string values from context
+// by key.
 func extractStringFromCtx(c *echo.Context, s string) string {
 
 	valueAny := c.Get(s)

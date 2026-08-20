@@ -9,7 +9,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-/* -------------------------------------------------------------------------- */
+// getResponseData helps to extract data from response struct.
 func getResponseData(c *echo.Context, e error) (status int, size int64) {
 	// Trying to get actual data from ResponseWriter
 	if obj, ok := c.Response().(*echo.Response); ok {
@@ -35,7 +35,7 @@ func getResponseData(c *echo.Context, e error) (status int, size int64) {
 	return status, size
 }
 
-/* -------------------------------------------------------------------------- */
+// Zerologger provides logging of all requests.
 func Zerologger(l *zerolog.Logger) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {

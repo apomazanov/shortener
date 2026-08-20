@@ -19,10 +19,13 @@ import (
 )
 
 const (
-	constraintUniqueAlias    = "idx_urls_unique_alias"
+	// constraintUniqueAlias is a name of unique alias constraint in postgre.
+	constraintUniqueAlias = "idx_urls_unique_alias"
+	// constraintUniqueOriginal is a name of unique origin constraint in postgre.
 	constraintUniqueOriginal = "idx_urls_unique_original"
 )
 
+// pgxPooler contains database methods used by this package.
 type pgxPooler interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
@@ -31,15 +34,19 @@ type pgxPooler interface {
 	Close()
 }
 
+// PostgresConfig defines configurations methods for database operations.
 type PostgresConfig interface {
 	GetDatabaseDSN() string
 	GetNoDBMigration() bool
 }
 
+// PostgresStorage contains data for database operations.
 type PostgresStorage struct {
+	// pool is a pool of database connections used for data transfer.
 	pool pgxPooler
 }
 
+// runMigrations starts a migration routine from 'migrations' directory.
 func runMigrations(ctx context.Context, dsn string) error {
 
 	goose.SetBaseFS(migrations.EmbedFS)
@@ -63,6 +70,7 @@ func runMigrations(ctx context.Context, dsn string) error {
 	return nil
 }
 
+// NewPostgresStorage creates a new PostgreSQL storage.
 func NewPostgresStorage(cfg PostgresConfig) (*PostgresStorage, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -100,6 +108,7 @@ func NewPostgresStorage(cfg PostgresConfig) (*PostgresStorage, error) {
 	return &PostgresStorage{pool: pool}, nil
 }
 
+// Save provides write operation of single recoed to postgre storage.
 func (r *PostgresStorage) Save(
 	ctx context.Context,
 	alias string,
@@ -147,6 +156,7 @@ func (r *PostgresStorage) Save(
 	return writtenAlias, nil
 }
 
+// SaveBatch provides write operation of batch of records to postgre storage.
 func (r *PostgresStorage) SaveBatch(
 	ctx context.Context,
 	toWrite map[string]string,
@@ -231,6 +241,7 @@ func (r *PostgresStorage) SaveBatch(
 
 }
 
+// Get provides a read operation of single record from postgre storage.
 func (r *PostgresStorage) Get(ctx context.Context, alias string) (original string, err error) {
 	if err := ctx.Err(); err != nil {
 		return "", fmt.Errorf("repo: get aborted: %w", err)
@@ -261,6 +272,7 @@ func (r *PostgresStorage) Get(ctx context.Context, alias string) (original strin
 	return original, nil
 }
 
+// GetByUser returns a list of aliases and original URLs stored by certain user.
 func (r *PostgresStorage) GetByUser(ctx context.Context, userID string) (data map[string]string, err error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("repo: get aborted: %w", err)
@@ -305,15 +317,18 @@ func (r *PostgresStorage) GetByUser(ctx context.Context, userID string) (data ma
 	return data, nil
 }
 
+// Close correctly closes connections from the pool.
 func (r *PostgresStorage) Close() error {
 	r.pool.Close()
 	return nil
 }
 
+// Ping is used for detecting database availability.
 func (r *PostgresStorage) Ping(ctx context.Context) error {
 	return r.pool.Ping(ctx)
 }
 
+// DeleteBatch provides delete operation for a batch of records from postgre storage.
 func (r *PostgresStorage) DeleteBatch(ctx context.Context, batch map[string][]string) error {
 	if len(batch) == 0 {
 		return nil

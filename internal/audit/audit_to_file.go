@@ -12,14 +12,21 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// AuditToFile contains data for writing audit events to file.
 type AuditToFile struct {
-	queue   chan domain.AuditEvent
-	log     *zerolog.Logger
-	mu      sync.RWMutex
-	file    *os.File
+	// queue input channel with events queue.
+	queue chan domain.AuditEvent
+	// log is a pointer to system logger.
+	log *zerolog.Logger
+	// mu provides thread-safety during write operation.
+	mu sync.RWMutex
+	// file is a pointer to File object.
+	file *os.File
+	// encoder provides easier write operation to file.
 	encoder *json.Encoder
 }
 
+// NewAuditToFile creates a new audit-to-file subscriber object.
 func NewAuditToFile(fileName string, log *zerolog.Logger) *AuditToFile {
 
 	dir := filepath.Dir(fileName)
@@ -46,10 +53,12 @@ func NewAuditToFile(fileName string, log *zerolog.Logger) *AuditToFile {
 	}
 }
 
+// Ch returns subscriber's input channel.
 func (s *AuditToFile) Ch() chan<- domain.AuditEvent {
 	return s.queue
 }
 
+// Run provides continious queue monitoring and writing events to file.
 func (s *AuditToFile) Run(ctx context.Context) {
 	defer s.close()
 
@@ -74,12 +83,14 @@ func (s *AuditToFile) Run(ctx context.Context) {
 	}
 }
 
+// write provides write operation.
 func (s *AuditToFile) write(event domain.AuditEvent) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.encoder.Encode(event)
 }
 
+// close correctly finishes write operation.
 func (s *AuditToFile) close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
