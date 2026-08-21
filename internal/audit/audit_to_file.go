@@ -19,7 +19,7 @@ type AuditToFile struct {
 	// log is a pointer to system logger.
 	log *zerolog.Logger
 	// mu provides thread-safety during write operation.
-	mu sync.RWMutex
+	mu sync.Mutex
 	// file is a pointer to File object.
 	file *os.File
 	// encoder provides easier write operation to file.
