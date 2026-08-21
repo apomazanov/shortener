@@ -14,7 +14,9 @@ import (
 
 const aliasSize = 6
 
-//go:generate mockgen -destination=mocks/mock_business.go -package=mocks github.com/apomazanov/shortener/internal/handlers BusinessService
+// BusinessService defines methods of business service used in handlers.
+//
+//go:generate mockgen -destination=mocks/mock_business.gen.go -package=mocks github.com/apomazanov/shortener/internal/handlers BusinessService
 type BusinessService interface {
 	GetOriginalURL(ctx context.Context, alias string) (original string, err error)
 	GetUserURLs(ctx context.Context, userID string) (data map[string]string, err error)
@@ -23,65 +25,91 @@ type BusinessService interface {
 	DeleteUserURLs(ctx context.Context, userID string, aliases []string) error
 }
 
-//go:generate mockgen -destination=mocks/mock_health.go -package=mocks github.com/apomazanov/shortener/internal/handlers HealthService
+// HealthService defines methods of health-check (ping) service used in handlers.
+//
+//go:generate mockgen -destination=mocks/mock_health.gen.go -package=mocks github.com/apomazanov/shortener/internal/handlers HealthService
 type HealthService interface {
 	Ping(ctx context.Context) error
 }
 
-//go:generate mockgen -destination=mocks/mock_config.go -package=mocks github.com/apomazanov/shortener/internal/handlers URLConfig
+// URLConfig defines methods of config used in handlers.
+//
+//go:generate mockgen -destination=mocks/mock_config.gen.go -package=mocks github.com/apomazanov/shortener/internal/handlers URLConfig
 type URLConfig interface {
 	GetURLBase() string
 }
 
-//go:generate mockgen -destination=mocks/mock_JWT.go -package=mocks github.com/apomazanov/shortener/internal/handlers JWT
+// JWT defines methods of JWT handling service used in handlers.
+//
+//go:generate mockgen -destination=mocks/mock_JWT.gen.go -package=mocks github.com/apomazanov/shortener/internal/handlers JWT
 type JWT interface {
 	CreateCookieWithUserID(userID string) (*http.Cookie, error)
 }
 
+// Handler contains data for handling application API endpoints.
 type Handler struct {
+	// business is a business service layer of application.
 	business BusinessService
-	health   HealthService
-	cfg      URLConfig
-	log      *zerolog.Logger
-	JWT      JWT
+	// health is a health-check (ping) service.
+	health HealthService
+	// cfg is a configuration service.
+	cfg URLConfig
+	// log is a pointer to system logger.
+	log *zerolog.Logger
+	// jwt is a JWT handling helper.
+	jwt JWT
 }
 
+// jsonShortenRequest defines data in shortening request (JSON format).
 type jsonShortenRequest struct {
+	// URL is a URL for shortening.
 	URL string `json:"url" validate:"required,url"`
 }
 
+// jsonShortenResponse defines data in shortening response (JSON format).
 type jsonShortenResponse struct {
+	// Result is an alias value.
 	Result string `json:"result"`
 }
 
+// jsonBatchRequestItem defines data in shortening request of batch of URLs.
 type jsonBatchRequestItem struct {
-	ID       string `json:"correlation_id" validate:"required"`
+	// ID is an identidier of URL for shortening.
+	ID string `json:"correlation_id" validate:"required"`
+	// Original is a URL for shortening.
 	Original string `json:"original_url" validate:"required,url"`
 }
 
+// jsonBatchRequestItem defines data in shortening response of batch of URLs.
 type jsonBatchResponseItem struct {
-	ID     string `json:"correlation_id"`
+	// ID is an identidier of URL for shortening.
+	ID string `json:"correlation_id"`
+	// Result is an alias value.
 	Result string `json:"short_url"`
 }
 
+// jsonGetUserURLsResponseItem defines data in response to 'GetUserURLs' request.
 type jsonGetUserURLsResponseItem struct {
-	ShortURL    string `json:"short_url"`
+	// ShortURL is an alias value.
+	ShortURL string `json:"short_url"`
+	// OriginalURL is an original URL value.
 	OriginalURL string `json:"original_url"`
 }
 
+// New creates a new handlers object.
 func New(b BusinessService, c URLConfig, l *zerolog.Logger, h HealthService, j JWT) *Handler {
 	return &Handler{
 		business: b,
 		health:   h,
 		cfg:      c,
 		log:      l,
-		JWT:      j,
+		jwt:      j,
 	}
 }
 
+// Get provides response to GET request of single alias value. It returns stored
+// value of original URL, if found.
 func (h *Handler) Get(c *echo.Context) error {
-
-	log := h.log.With().Str("op", "handler.Get").Logger()
 
 	// Raw context for deeper layers, evading 'echo' dependency
 	ctx := c.Request().Context()
@@ -90,7 +118,8 @@ func (h *Handler) Get(c *echo.Context) error {
 	alias := c.Param("alias")
 
 	if len(alias) != aliasSize {
-		log.Info().
+		h.log.Info().
+			Str("op", "handler.Get").
 			Str("alias", alias).
 			Msg("invalid alias")
 
@@ -101,6 +130,7 @@ func (h *Handler) Get(c *echo.Context) error {
 	original, err := h.business.GetOriginalURL(ctx, alias)
 
 	if err == nil {
+		c.Set("original", original)
 		// Return original URL with redirection
 		return c.Redirect(http.StatusTemporaryRedirect, original)
 	}
@@ -110,32 +140,35 @@ func (h *Handler) Get(c *echo.Context) error {
 	}
 
 	if errors.Is(err, domain.ErrNotFound) {
-		log.Info().
+		h.log.Info().
+			Str("op", "handler.Get").
 			Err(err).
 			Msg("alias not found")
 
 		return echo.ErrNotFound
 	}
 
-	log.Error().
+	h.log.Error().
+		Str("op", "handler.Get").
 		Err(err).
 		Msg("something went wrong")
 
 	return echo.ErrInternalServerError
 }
 
+// GetUserURLs provides response to GET request of all URLs which were stored by
+// certain user.
 func (h *Handler) GetUserURLs(c *echo.Context) error {
-
-	log := h.log.With().Str("op", "handler.GetUserURLs").Logger()
 
 	// Raw context for deeper layers, evading 'echo' dependency
 	ctx := c.Request().Context()
 
 	// Cookie
 
-	cookieData := handleCookie(c, h.JWT)
+	cookieData := handleCookie(c, h.jwt)
 	if cookieData.err != nil {
-		log.Error().
+		h.log.Error().
+			Str("op", "handler.GetUserURLs").
 			Err(cookieData.err).
 			Msg("Failed cookie handling")
 
@@ -160,7 +193,8 @@ func (h *Handler) GetUserURLs(c *echo.Context) error {
 			return c.NoContent(http.StatusNoContent)
 		}
 
-		log.Error().
+		h.log.Error().
+			Str("op", "handler.GetUserURLs").
 			Err(err).
 			Msg("something went wrong")
 
@@ -179,15 +213,15 @@ func (h *Handler) GetUserURLs(c *echo.Context) error {
 	return c.JSON(http.StatusOK, responseData)
 }
 
+// Ping provides response to GET request of health-check.
 func (h *Handler) Ping(c *echo.Context) error {
-
-	log := h.log.With().Str("op", "handler.Ping").Logger()
 
 	ctx := c.Request().Context()
 
 	if err := h.health.Ping(ctx); err != nil {
 
-		log.Error().
+		h.log.Error().
+			Str("op", "handler.Ping").
 			Err(err).
 			Msg("health check failed")
 
@@ -197,15 +231,16 @@ func (h *Handler) Ping(c *echo.Context) error {
 	return c.NoContent(http.StatusOK)
 }
 
+// CreateText provides response to POST request of creating alias of certain
+// URL (simple text format).
 func (h *Handler) CreateText(c *echo.Context) error {
-
-	log := h.log.With().Str("op", "handler.CreateText").Logger()
 
 	// Cookie
 
-	cookie := handleCookie(c, h.JWT)
+	cookie := handleCookie(c, h.jwt)
 	if cookie.err != nil {
-		log.Error().
+		h.log.Error().
+			Str("op", "handler.CreateText").
 			Err(cookie.err).
 			Msg("Failed cookie handling")
 
@@ -223,7 +258,8 @@ func (h *Handler) CreateText(c *echo.Context) error {
 	// Reading body, expecting long URL for shortening
 	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
-		log.Info().
+		h.log.Info().
+			Str("op", "handler.CreateText").
 			Err(err).
 			Msg("failed to read request body")
 
@@ -233,11 +269,6 @@ func (h *Handler) CreateText(c *echo.Context) error {
 	// Casting body to string, validating
 	requestData := jsonShortenRequest{URL: string(body)}
 	if err := c.Validate(&requestData); err != nil {
-		log.Info().
-			Err(err).
-			Any("request_data", requestData).
-			Msg("invalid request data")
-
 		return echo.ErrBadRequest
 	}
 
@@ -250,7 +281,8 @@ func (h *Handler) CreateText(c *echo.Context) error {
 		if errors.Is(err, domain.ErrOriginalURLDuplicate) {
 			responseStatus = http.StatusConflict
 		} else {
-			log.Error().
+			h.log.Error().
+				Str("op", "handler.CreateText").
 				Err(err).
 				Str("alias", alias).
 				Msg("alias creation failed")
@@ -264,24 +296,28 @@ func (h *Handler) CreateText(c *echo.Context) error {
 	// Cookie created for new users (user-id missing in ctx or invalid)
 	if !cookie.valid {
 		c.SetCookie(cookie.newCookie)
+		c.Set("user-id", userID)
 	}
 
+	c.Set("original", requestData.URL)
+
 	// base URL already validated during config
-	shortUrl := h.cfg.GetURLBase() + "/" + alias
-	return c.String(responseStatus, shortUrl)
+	shortURL := h.cfg.GetURLBase() + "/" + alias
+	return c.String(responseStatus, shortURL)
 }
 
-func (h *Handler) CreateJson(c *echo.Context) error {
+// CreateJSON provides response to POST request of creating alias of certain
+// URL (JSON format).
+func (h *Handler) CreateJSON(c *echo.Context) error {
 	var requestData jsonShortenRequest
 	var responseData jsonShortenResponse
 
-	log := h.log.With().Str("op", "handler.CreateJson").Logger()
-
 	// Cookie
 
-	cookie := handleCookie(c, h.JWT)
+	cookie := handleCookie(c, h.jwt)
 	if cookie.err != nil {
-		log.Error().
+		h.log.Error().
+			Str("op", "handler.CreateJSON").
 			Err(cookie.err).
 			Msg("Failed cookie handling")
 
@@ -298,20 +334,11 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 
 	// Reading body
 	if err := c.Bind(&requestData); err != nil {
-		log.Info().
-			Err(err).
-			Msg("failed to read request body")
-
 		return echo.ErrBadRequest
 	}
 
 	// Validating
 	if err := c.Validate(&requestData); err != nil {
-		log.Info().
-			Err(err).
-			Any("request_data", requestData).
-			Msg("invalid request data")
-
 		return echo.ErrBadRequest
 	}
 
@@ -324,7 +351,8 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 		if errors.Is(err, domain.ErrOriginalURLDuplicate) {
 			responseStatus = http.StatusConflict
 		} else {
-			log.Error().
+			h.log.Error().
+				Str("op", "handler.CreateJSON").
 				Err(err).
 				Str("alias", alias).
 				Msg("alias creation failed")
@@ -336,22 +364,26 @@ func (h *Handler) CreateJson(c *echo.Context) error {
 	// Cookie created for new users (user-id missing in ctx or invalid)
 	if !cookie.valid {
 		c.SetCookie(cookie.newCookie)
+		c.Set("user-id", userID)
 	}
 
+	c.Set("original", requestData.URL)
+
 	// Sending back short URL
-	responseData.Result, _ = url.JoinPath(h.cfg.GetURLBase(), alias)
+	responseData.Result = h.cfg.GetURLBase() + "/" + alias
 	return c.JSON(responseStatus, responseData)
 }
 
-func (h *Handler) CreateJsonBatch(c *echo.Context) error {
-
-	log := h.log.With().Str("op", "handler.CreateJsonBatch").Logger()
+// CreateJSONBatch provides response to POST request of creating a batch of
+// aliases to certain URLs.
+func (h *Handler) CreateJSONBatch(c *echo.Context) error {
 
 	// Cookie
 
-	cookie := handleCookie(c, h.JWT)
+	cookie := handleCookie(c, h.jwt)
 	if cookie.err != nil {
-		log.Error().
+		h.log.Error().
+			Str("op", "handler.CreateJSONBatch").
 			Err(cookie.err).
 			Msg("Failed cookie handling")
 
@@ -370,10 +402,6 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 	var requestData []jsonBatchRequestItem
 
 	if err := c.Bind(&requestData); err != nil {
-		log.Info().
-			Err(err).
-			Msg("failed to read request body")
-
 		return echo.ErrBadRequest
 	}
 
@@ -383,11 +411,6 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 	for _, item := range requestData {
 
 		if err := c.Validate(&item); err != nil {
-			log.Info().
-				Err(err).
-				Any("request_item", item).
-				Msg("invalid request data")
-
 			return echo.ErrBadRequest
 		}
 	}
@@ -409,7 +432,8 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 		if errors.Is(err, domain.ErrOriginalURLDuplicate) {
 			responseStatus = http.StatusConflict
 		} else {
-			log.Error().
+			h.log.Error().
+				Str("op", "handler.CreateJSONBatch").
 				Err(err).
 				Msg("alias creation failed")
 
@@ -435,22 +459,25 @@ func (h *Handler) CreateJsonBatch(c *echo.Context) error {
 	// Cookie created for new users (user-id missing in ctx or invalid)
 	if !cookie.valid {
 		c.SetCookie(cookie.newCookie)
+		c.Set("user-id", userID)
 	}
 
 	return c.JSON(responseStatus, responseData)
 }
 
-func (h *Handler) DeleteUserURLsByAlias(c *echo.Context) error {
-	log := h.log.With().Str("op", "handler.DeleteUserURLs").Logger()
+// DeleteUserURLs provides response to DELETE request of deleting all aliases
+// created by certain user.
+func (h *Handler) DeleteUserURLs(c *echo.Context) error {
 
 	// Raw context for deeper layers, evading 'echo' dependency
 	ctx := c.Request().Context()
 
 	// Cookie
 
-	cookie := handleCookie(c, h.JWT)
+	cookie := handleCookie(c, h.jwt)
 	if cookie.err != nil {
-		log.Error().
+		h.log.Error().
+			Str("op", "handler.DeleteUserURLs").
 			Err(cookie.err).
 			Msg("Failed cookie handling")
 
@@ -466,26 +493,15 @@ func (h *Handler) DeleteUserURLsByAlias(c *echo.Context) error {
 
 	// Reading body
 	if err := c.Bind(&aliases); err != nil {
-		log.Info().
-			Err(err).
-			Msg("failed to read request body")
-
 		return echo.ErrBadRequest
 	}
 
 	// Validating
 	if len(aliases) == 0 {
-		log.Info().
-			Msg("empty request data")
-
 		return echo.ErrBadRequest
 	}
 	for _, alias := range aliases {
 		if len(alias) != aliasSize {
-			log.Info().
-				Str("alias", alias).
-				Msg("invalid alias")
-
 			return echo.ErrBadRequest
 		}
 	}
@@ -494,7 +510,8 @@ func (h *Handler) DeleteUserURLsByAlias(c *echo.Context) error {
 	err := h.business.DeleteUserURLs(ctx, cookie.userID, aliases)
 	if err != nil {
 
-		log.Error().
+		h.log.Error().
+			Str("op", "handler.DeleteUserURLs").
 			Err(err).
 			Msg("something went wrong")
 
@@ -504,6 +521,7 @@ func (h *Handler) DeleteUserURLsByAlias(c *echo.Context) error {
 	return c.NoContent(http.StatusAccepted)
 }
 
+// Reject is a handler of all unsupported requests.
 func (h *Handler) Reject(c *echo.Context) error {
 
 	h.log.Warn().

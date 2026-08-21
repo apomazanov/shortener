@@ -16,24 +16,36 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// LocalStorage defines data for storage on local hard drive.
 type LocalStorage struct {
-	file     *os.File
-	encoder  *json.Encoder
-	mu       sync.RWMutex
-	cache    map[string]string
+	// file is a pointer to File object.
+	file *os.File
+	// encoder makes write operations easier.
+	encoder *json.Encoder
+	// mu provides thread-safety for data storage
+	mu sync.RWMutex
+	// cache stores data copy in-memory for fast reading operation and reduction of disc usage.
+	cache map[string]string
+	// lastUUID is last used UUID value.
 	lastUUID int
 }
 
+// LocalStorageConfig defines interface for confiduring local storage.
 type LocalStorageConfig interface {
 	GetStorageFile() string
 }
 
+// entry defines data fields of single recoed, stored in local storage.
 type entry struct {
-	UUID     int    `json:"uuid"`
-	Alias    string `json:"alias"`
+	// UUID is a data record ID.
+	UUID int `json:"uuid"`
+	// Alias is a shortened URL value.
+	Alias string `json:"alias"`
+	// Original is an original URL value.
 	Original string `json:"original"`
 }
 
+// NewLocalStorage creates a new local storage object.
 func NewLocalStorage(cfg LocalStorageConfig, log *zerolog.Logger) (*LocalStorage, error) {
 
 	storage := &LocalStorage{cache: make(map[string]string)}
@@ -87,6 +99,7 @@ func NewLocalStorage(cfg LocalStorageConfig, log *zerolog.Logger) (*LocalStorage
 	return storage, nil
 }
 
+// Close correctly closes file object of local storage.
 func (r *LocalStorage) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -105,6 +118,7 @@ func (r *LocalStorage) Close() error {
 	return nil
 }
 
+// Save provides write operation of single recoed to local storage.
 func (r *LocalStorage) Save(
 	ctx context.Context,
 	alias string,
@@ -150,6 +164,7 @@ func (r *LocalStorage) Save(
 	return alias, nil
 }
 
+// SaveBatch provides write operation of batch of records to local storage.
 func (r *LocalStorage) SaveBatch(
 	ctx context.Context,
 	toWrite map[string]string,
@@ -228,6 +243,7 @@ MainLoop:
 	return written, nil
 }
 
+// Get provides a read operation of single record from local storage.
 func (r *LocalStorage) Get(ctx context.Context, alias string) (original string, err error) {
 	if err := ctx.Err(); err != nil {
 		return "", fmt.Errorf("repo: get aborted: %w", err)
@@ -244,14 +260,20 @@ func (r *LocalStorage) Get(ctx context.Context, alias string) (original string, 
 	return "", domain.ErrNotFound
 }
 
+// GetByUser returns a list of aliases and original URLs stored by certain user.
 func (r *LocalStorage) GetByUser(ctx context.Context, userID string) (data map[string]string, err error) {
+	// not implemented for this storage
 	return nil, domain.ErrNotFound
 }
 
+// Ping is used for detecting database availability.
 func (r *LocalStorage) Ping(ctx context.Context) error {
+	// not implemented for this storage
 	return nil
 }
 
+// DeleteBatch provides delete operation for a batch of records from local storage.
 func (r *LocalStorage) DeleteBatch(ctx context.Context, batch map[string][]string) error {
+	// not implemented for this storage
 	return nil
 }

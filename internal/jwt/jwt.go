@@ -1,3 +1,4 @@
+// Package jwt defines types and methods that help to operate with JWT tokens.
 package jwt
 
 import (
@@ -8,18 +9,26 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// Data contains data stored in auth cookie.
 type Data struct {
+	// SigningKey is a signing key.
 	SigningKey []byte
+	// CookieName is a name of cookie.
 	CookieName string
-	TokenTTL   time.Duration
-	CookieTTL  time.Duration
+	// TokenTTL is a token time-to-live value.
+	TokenTTL time.Duration
+	// CookieTTL is a cookie time-to-live value.
+	CookieTTL time.Duration
 }
 
+// Claims contains claims that are used in auth cookies.
 type Claims struct {
 	jwt.RegisteredClaims
+	// UserID is a filed that contains request user-id.
 	UserID string
 }
 
+// CreateCookieWithUserID creates a new cookie object for certain user.
 func (d *Data) CreateCookieWithUserID(userID string) (*http.Cookie, error) {
 
 	claims := Claims{

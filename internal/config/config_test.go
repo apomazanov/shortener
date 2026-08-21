@@ -14,6 +14,8 @@ func TestNew(t *testing.T) {
 		os.Unsetenv("DATABASE_DSN")
 		os.Unsetenv("NO_DB_MIGRATION")
 		os.Unsetenv("JWT_SECRET")
+		os.Unsetenv("AUDIT_FILE")
+		os.Unsetenv("AUDIT_URL")
 	}
 
 	tests := []struct {
@@ -34,6 +36,8 @@ func TestNew(t *testing.T) {
 				DatabaseDSN:   "",
 				NoDBMigration: false,
 				JWTSecret:     "",
+				AuditFile:     "",
+				AuditURL:      "",
 			},
 			wantErr: true,
 		},
@@ -163,6 +167,8 @@ func TestConfigGetters(t *testing.T) {
 		DatabaseDSN:   "postgres://localhost:5432/test",
 		NoDBMigration: true,
 		JWTSecret:     "secure key",
+		AuditFile:     "audit/file",
+		AuditURL:      "http://audit.url",
 	}
 
 	if cfg.GetServerAddress() != ":1234" {
@@ -181,6 +187,12 @@ func TestConfigGetters(t *testing.T) {
 		t.Errorf("GetNoDBMigration() = %v, want %v", cfg.GetNoDBMigration(), true)
 	}
 	if cfg.GetJWTSecret() != "secure key" {
-		t.Errorf("GetJWTSecret() = %v, want %v", cfg.GetNoDBMigration(), "secure key")
+		t.Errorf("GetJWTSecret() = %v, want %v", cfg.GetJWTSecret(), "secure key")
+	}
+	if cfg.GetAuditFile() != "audit/file" {
+		t.Errorf("GetAuditFile() = %v, want %v", cfg.GetAuditFile(), "secure key")
+	}
+	if cfg.GetAuditURL() != "http://audit.url" {
+		t.Errorf("GetAuditURL() = %v, want %v", cfg.GetAuditURL(), "secure key")
 	}
 }

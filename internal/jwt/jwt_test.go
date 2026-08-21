@@ -46,6 +46,6 @@ func TestData_CreateCookieWithUserID(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, token.Valid)
 		assert.Equal(t, userID, claims.UserID)
-		assert.True(t, claims.ExpiresAt.Time.After(time.Now())) // Check token expiration time
+		assert.True(t, claims.ExpiresAt.After(time.Now())) // Check token expiration time
 	})
 }

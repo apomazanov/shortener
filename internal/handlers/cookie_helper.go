@@ -8,16 +8,24 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
+// cookieData contains data for handling cookie object.
 type cookieData struct {
-	exists    bool
-	valid     bool
-	userID    string
+	// exists flag shows if cookie exists in a request.
+	exists bool
+	// valid shows if cookie is valid.
+	valid bool
+	// userID is user-id value stored in token.
+	userID string
+	// newCookie is a pointer to new cookie object (with newUserID value).
 	newCookie *http.Cookie
+	// newUserID is a new user-id value.
 	newUserID string
-	err       error
+	// err is an error value that might be set during cookie handling.
+	err error
 }
 
-// if received cookie is OK, newCookie and newUserID are nil and ""
+// handleCookie handles cookie object and fills data to cookieData.
+// If received cookie is OK, newCookie and newUserID are nil and ""
 func handleCookie(c *echo.Context, jwt JWT) *cookieData {
 
 	var result cookieData
@@ -25,13 +33,13 @@ func handleCookie(c *echo.Context, jwt JWT) *cookieData {
 
 	result.exists, ok = extractCookieExistsFromCtx(c)
 	if !ok {
-		result.err = fmt.Errorf("Failed extracting cookie-exists from context")
+		result.err = fmt.Errorf("failed extracting cookie-exists from context")
 		return &result
 	}
 
 	result.userID, ok = extractUserIDFromCtx(c)
 	if !ok {
-		result.err = fmt.Errorf("Failed extracting user-id from context")
+		result.err = fmt.Errorf("failed extracting user-id from context")
 		return &result
 	}
 
@@ -45,7 +53,7 @@ func handleCookie(c *echo.Context, jwt JWT) *cookieData {
 		var err error
 		result.newCookie, err = jwt.CreateCookieWithUserID(result.newUserID)
 		if err != nil {
-			result.err = fmt.Errorf("Cookie creation failed: %w", err)
+			result.err = fmt.Errorf("cookie creation failed: %w", err)
 			return &result
 		}
 	}
@@ -53,6 +61,7 @@ func handleCookie(c *echo.Context, jwt JWT) *cookieData {
 	return &result
 }
 
+// extractUserIDFromCtx helps to extract user-id value from context.
 func extractUserIDFromCtx(c *echo.Context) (userID string, ok bool) {
 
 	userIDAny := c.Get("user-id")
@@ -66,6 +75,7 @@ func extractUserIDFromCtx(c *echo.Context) (userID string, ok bool) {
 	return userID, ok
 }
 
+// extractCookieExistsFromCtx helps to extract value of parameter 'cookie-exists' from context.
 func extractCookieExistsFromCtx(c *echo.Context) (exists bool, ok bool) {
 
 	existsAny := c.Get("cookie-exists")
@@ -79,6 +89,7 @@ func extractCookieExistsFromCtx(c *echo.Context) (exists bool, ok bool) {
 	return exists, ok
 }
 
+// newUUIDString generates a new user-id value.
 func newUUIDString() string {
 	uuid := uuid.New()
 	return uuid.String()

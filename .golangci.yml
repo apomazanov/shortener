@@ -1,0 +1,16 @@
+version: "2"
+
+run:
+  timeout: 2m
+
+linters:
+  default: none
+  enable:
+    - staticcheck
+    - govet
+    - unused
+
+  settings:
+    staticcheck:
+      checks:
+        - "all"
