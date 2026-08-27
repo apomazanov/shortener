@@ -28,6 +28,12 @@ import (
 	my_middleware "github.com/apomazanov/shortener/internal/middleware"
 )
 
+var (
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
+)
+
 type Repo interface {
 	service.Repo
 	Close() error
@@ -35,6 +41,9 @@ type Repo interface {
 }
 
 func run(log *zerolog.Logger) error {
+	fmt.Printf("Build version: %s\n\r", buildVersion)
+	fmt.Printf("Build date: %s\n\r", buildDate)
+	fmt.Printf("Build commit: %s\n\r", buildCommit)
 
 	cfg, err := config.New(os.Args[1:])
 	if err != nil {
