@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -253,14 +254,14 @@ func generateResetFile(dirPath, pkgName string, structs []structData) error {
 			case kindPointerStruct:
 				builder.WriteString("\tif resetter, ok := any(rs.")
 				builder.WriteString(f.name)
-				builder.WriteString(").(interface{ Reset() }); ok && rs.")
+				builder.WriteString(").(Resetter}); ok && rs.")
 				builder.WriteString(f.name)
 				builder.WriteString(" != nil {\n\t\tresetter.Reset()\n\t}\n")
 
 			case kindStruct:
 				builder.WriteString("\tif resetter, ok := any(&rs.")
 				builder.WriteString(f.name)
-				builder.WriteString(").(interface{ Reset() }); ok {\n\t\tresetter.Reset()\n\t} else {\n\t\tvar zero ")
+				builder.WriteString(").(Resetter); ok {\n\t\tresetter.Reset()\n\t} else {\n\t\tvar zero ")
 				builder.WriteString(f.fType)
 				builder.WriteString("\n\t\trs.")
 				builder.WriteString(f.name)
@@ -320,4 +321,48 @@ func genPrimitiveReset(builder *strings.Builder, f field) {
 		builder.WriteString(f.name)
 		builder.WriteString(" = zero\n\t}\n")
 	}
+}
+
+type Resetter interface {
+	Reset()
+}
+
+type Pool[T Resetter] struct {
+	objects []T
+	mu      sync.Mutex
+}
+
+func New[T Resetter]() *Pool[T] {
+	return &Pool[T]{}
+}
+
+func (p *Pool[T]) Get() (T, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	sz := len(p.objects)
+	var zero T
+
+	if sz == 0 {
+		return zero, fmt.Errorf("no objects available in Pool")
+	}
+
+	lastIdx := sz - 1
+	obj := p.objects[lastIdx]
+	p.objects[lastIdx] = zero
+	p.objects = p.objects[:lastIdx]
+
+	return obj, nil
+
+}
+
+func (p *Pool[T]) Put(obj T) {
+	if any(obj) == nil {
+		return
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.objects = append(p.objects, obj)
 }
