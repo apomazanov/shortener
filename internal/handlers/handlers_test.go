@@ -1462,6 +1462,8 @@ func BenchmarkCreateJSON(b *testing.B) {
 	expectedResult := decoded.Result
 
 	for b.Loop() {
+		b.StopTimer()
+
 		res := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"url":"`+validURL+`"}`))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -1469,6 +1471,8 @@ func BenchmarkCreateJSON(b *testing.B) {
 		tcx.ctx.Reset(req, res)
 		tcx.ctx.Set("user-id", validUserID)
 		tcx.ctx.Set("cookie-exists", true)
+
+		b.StartTimer()
 
 		err := h.CreateJSON(tcx.ctx)
 
