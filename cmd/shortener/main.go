@@ -41,9 +41,9 @@ type Repo interface {
 }
 
 func run(log *zerolog.Logger) error {
-	fmt.Printf("Build version: %s\n\r", buildVersion)
-	fmt.Printf("Build date: %s\n\r", buildDate)
-	fmt.Printf("Build commit: %s\n\r", buildCommit)
+	fmt.Printf("Build version: %s\n", buildVersion)
+	fmt.Printf("Build date: %s\n", buildDate)
+	fmt.Printf("Build commit: %s\n", buildCommit)
 
 	cfg, err := config.New(os.Args[1:])
 	if err != nil {

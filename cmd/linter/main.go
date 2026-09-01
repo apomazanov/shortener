@@ -19,7 +19,7 @@ func run(pass *analysis.Pass) (any, error) {
 
 			if decl, ok := n.(*ast.FuncDecl); ok {
 
-				notMain := decl.Name.Name != "main"
+				notMain := !(decl.Name.Name == "main" && pass.Pkg.Name() == "main")
 
 				ast.Inspect(n, func(innerN ast.Node) bool {
 
@@ -27,7 +27,7 @@ func run(pass *analysis.Pass) (any, error) {
 
 						// detecting panic everywhere
 						if fun, ok := call.Fun.(*ast.Ident); ok {
-							if fun.Name == "panic" {
+							if obj := pass.TypesInfo.Uses[fun]; obj != nil && obj.Pkg() == nil && obj.Name() == "panic" {
 								pass.Reportf(call.Pos(), "pure panic call")
 							}
 						}
@@ -35,15 +35,13 @@ func run(pass *analysis.Pass) (any, error) {
 						// detecting log.Fatal and os.Exit only outside main
 						if fun, ok := call.Fun.(*ast.SelectorExpr); ok {
 
-							var pkgName string
-							if pkg, ok := fun.X.(*ast.Ident); ok {
-								pkgName = pkg.Name
-							}
+							obj := pass.TypesInfo.Uses[fun.Sel]
+							if obj != nil && obj.Pkg() != nil {
+								fullName := obj.Pkg().Path() + "." + obj.Name()
 
-							fullName := pkgName + "." + fun.Sel.Name
-
-							if notMain && (fullName == "log.Fatal" || fullName == "os.Exit") {
-								pass.Reportf(call.Pos(), "%s is forbidden outside main", fullName)
+								if notMain && (fullName == "log.Fatal" || fullName == "os.Exit") {
+									pass.Reportf(call.Pos(), "%s is forbidden outside main", fullName)
+								}
 							}
 						}
 					}
