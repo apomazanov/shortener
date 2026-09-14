@@ -28,6 +28,8 @@ type Config struct {
 	AuditFile string `env:"AUDIT_FILE"`
 	// AuditURL is an address of remote audit subscriber.
 	AuditURL string `env:"AUDIT_URL"`
+	// EnableHTTPS is a flag for HTTPS mode for this server.
+	EnableHTTPS bool `env:"ENABLE_HTTPS" envDefault:"false"`
 }
 
 // New creates a new config object.
@@ -49,6 +51,7 @@ func New(args []string) (*Config, error) {
 	fs.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "Database DSN")
 	fs.StringVar(&cfg.AuditFile, "audit-file", cfg.AuditFile, "Audit file path")
 	fs.StringVar(&cfg.AuditURL, "audit-url", cfg.AuditURL, "Audit URL address")
+	fs.BoolVar(&cfg.EnableHTTPS, "s", false, "Enable HTTPS mode")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, fmt.Errorf("flags parsing failed: %w", err)
@@ -112,4 +115,9 @@ func (c *Config) GetAuditFile() string {
 // GetAuditURL returns value of 'AuditURL' parameter.
 func (c *Config) GetAuditURL() string {
 	return c.AuditURL
+}
+
+// IsHTTPSEnabled shows if HTTPS mode is enabled in config.
+func (c *Config) IsHTTPSEnabled() bool {
+	return c.EnableHTTPS
 }

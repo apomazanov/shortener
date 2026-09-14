@@ -15,6 +15,7 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/rs/zerolog"
+	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/apomazanov/shortener/internal/audit"
 	"github.com/apomazanov/shortener/internal/config"
@@ -161,6 +162,20 @@ func run(log *zerolog.Logger) error {
 	sc := echo.StartConfig{
 		Address:         cfg.GetServerAddress(),
 		GracefulTimeout: 10 * time.Second,
+	}
+
+	if cfg.EnableHTTPS == true {
+		m := &autocert.Manager{
+			Prompt:     autocert.AcceptTOS,
+			HostPolicy: autocert.HostWhitelist("url.shortener"), // must be valid host with white IP
+			// Cache certificates to avoid issues with rate limits (https://letsencrypt.org/docs/rate-limits)
+			Cache: autocert.DirCache("/var/www/.cache"),
+		}
+
+		sc.TLSConfig = m.TLSConfig()
+
+		// Needed for ACME challenge (LetsEncrypt provides domain validation on port 80)
+		go http.ListenAndServe(":80", m.HTTPHandler(nil))
 	}
 
 	err = sc.Start(ctx, e) // blocking, HTTP-server running
