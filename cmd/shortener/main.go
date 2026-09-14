@@ -164,7 +164,7 @@ func run(log *zerolog.Logger) error {
 		GracefulTimeout: 10 * time.Second,
 	}
 
-	if cfg.EnableHTTPS == true {
+	if cfg.EnableHTTPS {
 		m := &autocert.Manager{
 			Prompt:     autocert.AcceptTOS,
 			HostPolicy: autocert.HostWhitelist("url.shortener"), // must be valid host with white IP
