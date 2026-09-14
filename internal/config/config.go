@@ -2,9 +2,11 @@
 package config
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/caarlos0/env/v11"
@@ -13,27 +15,29 @@ import (
 // Config contains application configuration parameters.
 type Config struct {
 	// ServerAddr is this app address.
-	ServerAddr string `env:"SERVER_ADDRESS"`
+	ServerAddr string `env:"SERVER_ADDRESS" json:"server_address"`
 	// BaseURL is a base URL for aliases.
-	BaseURL string `env:"BASE_URL"`
+	BaseURL string `env:"BASE_URL" json:"base_url"`
 	// StorageFile is a path to file for local storage.
-	StorageFile string `env:"FILE_STORAGE_PATH"`
+	StorageFile string `env:"FILE_STORAGE_PATH" json:"file_storage_path"`
 	// DatabaseDSN is a database connection path for PostgreSQL storage.
-	DatabaseDSN string `env:"DATABASE_DSN"`
+	DatabaseDSN string `env:"DATABASE_DSN" json:"database_dsn"`
 	// NoDBMigration is a flag for disabling migration process at application startup.
-	NoDBMigration bool `env:"NO_DB_MIGRATION"`
+	NoDBMigration bool `env:"NO_DB_MIGRATION" json:"no_db_migration"`
 	// JWTSecret is a string for JWT key.
 	JWTSecret string `env:"JWT_SECRET"`
 	// AuditFile is a path to file for local audit subscriber.
-	AuditFile string `env:"AUDIT_FILE"`
+	AuditFile string `env:"AUDIT_FILE" json:"audit_file"`
 	// AuditURL is an address of remote audit subscriber.
-	AuditURL string `env:"AUDIT_URL"`
+	AuditURL string `env:"AUDIT_URL" json:"audit_url"`
 	// EnableHTTPS is a flag for HTTPS mode for this server.
-	EnableHTTPS bool `env:"ENABLE_HTTPS" envDefault:"false"`
-	// CertFile is a certificate file for HTTPs
-	CertFile string `env:"CERT_FILE" envDefault:"cert.pem"`
-	// KeyFile is a key file for HTTPs
-	KeyFile string `env:"KEY_FILE" envDefault:"key.pem"`
+	EnableHTTPS bool `env:"ENABLE_HTTPS" envDefault:"false" json:"enable_https"`
+	// CertFile is a certificate file for HTTPs.
+	CertFile string `env:"CERT_FILE" envDefault:"cert.pem" json:"cert_file"`
+	// KeyFile is a key file for HTTPs.
+	KeyFile string `env:"KEY_FILE" envDefault:"key.pem" json:"key_file"`
+	// ConfigFile is a path to application config file in JSON format.
+	ConfigFile string `env:"CONFIG"`
 }
 
 // New creates a new config object.
@@ -45,7 +49,15 @@ func New(args []string) (*Config, error) {
 		JWTSecret:  "",
 	}
 
-	// Flags overwrite default values
+	// Config file overrides default values
+	if cfg.ConfigFile != "" {
+		err := applyConfigFile(&cfg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read config file: %w", err)
+		}
+	}
+
+	// Flags have higher priority than config file
 
 	fs := flag.NewFlagSet("app_fs", flag.ContinueOnError)
 
@@ -56,6 +68,8 @@ func New(args []string) (*Config, error) {
 	fs.StringVar(&cfg.AuditFile, "audit-file", cfg.AuditFile, "Audit file path")
 	fs.StringVar(&cfg.AuditURL, "audit-url", cfg.AuditURL, "Audit URL address")
 	fs.BoolVar(&cfg.EnableHTTPS, "s", false, "Enable HTTPS mode")
+	fs.StringVar(&cfg.ConfigFile, "c", cfg.AuditURL, "Config file path")
+	fs.StringVar(&cfg.ConfigFile, "config", cfg.AuditURL, "Config file path")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, fmt.Errorf("flags parsing failed: %w", err)
@@ -134,4 +148,20 @@ func (c *Config) GetCertFile() string {
 // GetKeyFile returns path to key file for HTTPs
 func (c *Config) GetKeyFile() string {
 	return c.KeyFile
+}
+
+func applyConfigFile(cfg *Config) error {
+
+	file, err := os.Open(cfg.ConfigFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	if err := decoder.Decode(cfg); err != nil {
+		return err
+	}
+
+	return nil
 }
