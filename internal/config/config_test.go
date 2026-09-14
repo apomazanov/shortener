@@ -173,6 +173,8 @@ func TestConfigGetters(t *testing.T) {
 		AuditFile:     "audit/file",
 		AuditURL:      "http://audit.url",
 		EnableHTTPS:   true,
+		CertFile:      "cert.pem",
+		KeyFile:       "key.pem",
 	}
 
 	if cfg.GetServerAddress() != ":1234" {
@@ -199,7 +201,13 @@ func TestConfigGetters(t *testing.T) {
 	if cfg.GetAuditURL() != "http://audit.url" {
 		t.Errorf("GetAuditURL() = %v, want %v", cfg.GetAuditURL(), "http://audit.url")
 	}
-	if cfg.IsHTTPSEnabled() != true {
+	if !cfg.IsHTTPSEnabled() {
 		t.Errorf("IsHTTPSEnabled() = %v, want %v", cfg.IsHTTPSEnabled(), true)
+	}
+	if cfg.GetCertFile() != "cert.pem" {
+		t.Errorf("GetCertFile() = %v, want %v", cfg.GetCertFile(), "cert.pem")
+	}
+	if cfg.GetKeyFile() != "key.pem" {
+		t.Errorf("GetKeyFile() = %v, want %v", cfg.GetKeyFile(), "key.pem")
 	}
 }

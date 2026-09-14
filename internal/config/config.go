@@ -30,6 +30,10 @@ type Config struct {
 	AuditURL string `env:"AUDIT_URL"`
 	// EnableHTTPS is a flag for HTTPS mode for this server.
 	EnableHTTPS bool `env:"ENABLE_HTTPS" envDefault:"false"`
+	// CertFile is a certificate file for HTTPs
+	CertFile string `env:"CERT_FILE" envDefault:"cert.pem"`
+	// KeyFile is a key file for HTTPs
+	KeyFile string `env:"KEY_FILE" envDefault:"key.pem"`
 }
 
 // New creates a new config object.
@@ -120,4 +124,14 @@ func (c *Config) GetAuditURL() string {
 // IsHTTPSEnabled shows if HTTPS mode is enabled in config.
 func (c *Config) IsHTTPSEnabled() bool {
 	return c.EnableHTTPS
+}
+
+// GetCertFile returns path to certificate file for HTTPs
+func (c *Config) GetCertFile() string {
+	return c.CertFile
+}
+
+// GetKeyFile returns path to key file for HTTPs
+func (c *Config) GetKeyFile() string {
+	return c.KeyFile
 }

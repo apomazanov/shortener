@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/http"
@@ -15,7 +16,6 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/rs/zerolog"
-	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/apomazanov/shortener/internal/audit"
 	"github.com/apomazanov/shortener/internal/config"
@@ -165,17 +165,15 @@ func run(log *zerolog.Logger) error {
 	}
 
 	if cfg.EnableHTTPS {
-		m := &autocert.Manager{
-			Prompt:     autocert.AcceptTOS,
-			HostPolicy: autocert.HostWhitelist("url.shortener"), // must be valid host with white IP
-			// Cache certificates to avoid issues with rate limits (https://letsencrypt.org/docs/rate-limits)
-			Cache: autocert.DirCache("/var/www/.cache"),
+
+		cert, err := tls.LoadX509KeyPair(cfg.GetCertFile(), cfg.GetKeyFile())
+		if err != nil {
+			return fmt.Errorf("run: failed to load cert/key file: %w", err)
 		}
 
-		sc.TLSConfig = m.TLSConfig()
-
-		// Needed for ACME challenge (LetsEncrypt provides domain validation on port 80)
-		go http.ListenAndServe(":8081", m.HTTPHandler(nil)) // 8081 for non-root run
+		sc.TLSConfig = &tls.Config{
+			Certificates: []tls.Certificate{cert},
+		}
 	}
 
 	err = sc.Start(ctx, e) // blocking, HTTP-server running
