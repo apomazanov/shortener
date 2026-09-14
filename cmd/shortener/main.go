@@ -175,7 +175,7 @@ func run(log *zerolog.Logger) error {
 		sc.TLSConfig = m.TLSConfig()
 
 		// Needed for ACME challenge (LetsEncrypt provides domain validation on port 80)
-		go http.ListenAndServe(":80", m.HTTPHandler(nil))
+		go http.ListenAndServe(":8081", m.HTTPHandler(nil)) // 8081 for non-root run
 	}
 
 	err = sc.Start(ctx, e) // blocking, HTTP-server running
