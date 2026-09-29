@@ -40,46 +40,73 @@ type Config struct {
 	ConfigFile string `env:"CONFIG"`
 }
 
+func (c *Config) applyNewConfig(new *Config) {
+	applyStrValue(&c.ServerAddr, new.ServerAddr)
+	applyStrValue(&c.BaseURL, new.BaseURL)
+	applyStrValue(&c.StorageFile, new.StorageFile)
+	applyStrValue(&c.DatabaseDSN, new.DatabaseDSN)
+	applyStrValue(&c.JWTSecret, new.JWTSecret)
+	applyStrValue(&c.AuditFile, new.AuditFile)
+	applyStrValue(&c.AuditURL, new.AuditURL)
+	applyStrValue(&c.CertFile, new.CertFile)
+	applyStrValue(&c.KeyFile, new.KeyFile)
+	applyStrValue(&c.ConfigFile, new.ConfigFile)
+
+	c.NoDBMigration = new.NoDBMigration
+	c.EnableHTTPS = new.EnableHTTPS
+}
+
 // New creates a new config object.
 func New(args []string) (*Config, error) {
 
-	cfg := Config{
-		ServerAddr: ":8080",
-		BaseURL:    "http://localhost:8080",
-		JWTSecret:  "",
-	}
+	// Configuration data from flags
 
-	// Config file overrides default values
-	if cfg.ConfigFile != "" {
-		err := applyConfigFile(&cfg)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read config file: %w", err)
-		}
-	}
-
-	// Flags have higher priority than config file
-
+	var cfgFlags Config
 	fs := flag.NewFlagSet("app_fs", flag.ContinueOnError)
 
-	fs.StringVar(&cfg.BaseURL, "b", cfg.BaseURL, "Base URL for aliases")
-	fs.StringVar(&cfg.ServerAddr, "a", cfg.ServerAddr, "HTTP-server address:port")
-	fs.StringVar(&cfg.StorageFile, "f", cfg.StorageFile, "Storage file path")
-	fs.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "Database DSN")
-	fs.StringVar(&cfg.AuditFile, "audit-file", cfg.AuditFile, "Audit file path")
-	fs.StringVar(&cfg.AuditURL, "audit-url", cfg.AuditURL, "Audit URL address")
-	fs.BoolVar(&cfg.EnableHTTPS, "s", false, "Enable HTTPS mode")
-	fs.StringVar(&cfg.ConfigFile, "c", cfg.AuditURL, "Config file path")
-	fs.StringVar(&cfg.ConfigFile, "config", cfg.AuditURL, "Config file path")
+	fs.StringVar(&cfgFlags.BaseURL, "b", cfgFlags.BaseURL, "Base URL for aliases")
+	fs.StringVar(&cfgFlags.ServerAddr, "a", cfgFlags.ServerAddr, "HTTP-server address:port")
+	fs.StringVar(&cfgFlags.StorageFile, "f", cfgFlags.StorageFile, "Storage file path")
+	fs.StringVar(&cfgFlags.DatabaseDSN, "d", cfgFlags.DatabaseDSN, "Database DSN")
+	fs.StringVar(&cfgFlags.AuditFile, "audit-file", cfgFlags.AuditFile, "Audit file path")
+	fs.StringVar(&cfgFlags.AuditURL, "audit-url", cfgFlags.AuditURL, "Audit URL address")
+	fs.BoolVar(&cfgFlags.EnableHTTPS, "s", false, "Enable HTTPS mode")
+	fs.StringVar(&cfgFlags.ConfigFile, "c", cfgFlags.ConfigFile, "Config file path")
+	fs.StringVar(&cfgFlags.ConfigFile, "config", cfgFlags.ConfigFile, "Config file path")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, fmt.Errorf("flags parsing failed: %w", err)
 	}
 
-	// Environment variables have highest priority
+	// Configuration data from environment variables
 
-	if err := env.Parse(&cfg); err != nil {
+	var cfgEnv Config
+	if err := env.Parse(&cfgEnv); err != nil {
 		return nil, fmt.Errorf("env parsing failed: %w", err)
 	}
+
+	// Configuration data from JSON file
+
+	var cfgFileName string
+
+	applyStrValue(&cfgFileName, cfgFlags.ConfigFile)
+	applyStrValue(&cfgFileName, cfgEnv.ConfigFile)
+
+	cfgJSON, err := getConfigFromFile(cfgFileName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	// Setting configuration data from all sources. Source with higher priority overwrites previous values.
+
+	cfg := Config{
+		ServerAddr: ":8080",
+		BaseURL:    "http://localhost:8080",
+	}
+
+	cfg.applyNewConfig(&cfgJSON)
+	cfg.applyNewConfig(&cfgFlags)
+	cfg.applyNewConfig(&cfgEnv)
 
 	// Validating BaseURL
 	if _, err := url.ParseRequestURI(cfg.BaseURL); err != nil {
@@ -150,18 +177,31 @@ func (c *Config) GetKeyFile() string {
 	return c.KeyFile
 }
 
-func applyConfigFile(cfg *Config) error {
+func getConfigFromFile(fileName string) (Config, error) {
 
-	file, err := os.Open(cfg.ConfigFile)
+	var cfg Config
+
+	if fileName == "" {
+		// not an error, returning empty config
+		return cfg, nil
+	}
+
+	file, err := os.Open(fileName)
 	if err != nil {
-		return err
+		return cfg, err
 	}
 	defer file.Close()
 
 	decoder := json.NewDecoder(file)
-	if err := decoder.Decode(cfg); err != nil {
-		return err
+	if err := decoder.Decode(&cfg); err != nil {
+		return cfg, err
 	}
 
-	return nil
+	return cfg, nil
+}
+
+func applyStrValue(old *string, new string) {
+	if new != "" {
+		*old = new
+	}
 }

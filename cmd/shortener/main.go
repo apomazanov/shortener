@@ -51,6 +51,8 @@ func run(log *zerolog.Logger) error {
 		return fmt.Errorf("run: config error: %w", err)
 	}
 
+	var wgAsyncRoutines sync.WaitGroup
+
 	// Repository
 
 	var r Repo
@@ -89,10 +91,19 @@ func run(log *zerolog.Logger) error {
 
 	// Service and handlers
 
-	s := service.New(r, &service.AsyncDeleterConfig{
+	deleter := service.NewAsyncDeleter(r, &service.AsyncDeleterConfig{
 		BatchSize: 10,
 		Timeout:   time.Second * 3,
 	}, log)
+
+	deleterCtx, deleterCancel := context.WithCancel(context.Background())
+	defer deleterCancel()
+
+	wgAsyncRoutines.Go(func() {
+		deleter.Run(deleterCtx)
+	})
+
+	s := service.New(r, deleter)
 
 	h := handlers.New(s, cfg, log, r, &jwtData)
 
@@ -104,17 +115,15 @@ func run(log *zerolog.Logger) error {
 	auditCtx, auditCancel := context.WithCancel(context.Background())
 	defer auditCancel()
 
-	var wgAudit sync.WaitGroup
-
 	auditor := audit.NewDispatcher(log)
-	wgAudit.Go(func() {
+	wgAsyncRoutines.Go(func() {
 		auditor.Run(auditCtx)
 	})
 
 	if cfg.GetAuditFile() != "" {
 		auditToFile := audit.NewAuditToFile(cfg.GetAuditFile(), log)
 		auditor.Register(auditToFile)
-		wgAudit.Go(func() {
+		wgAsyncRoutines.Go(func() {
 			auditToFile.Run(auditCtx)
 		})
 	}
@@ -122,7 +131,7 @@ func run(log *zerolog.Logger) error {
 	if cfg.GetAuditURL() != "" {
 		auditToURL := audit.NewAuditToURL(cfg.GetAuditURL(), log)
 		auditor.Register(auditToURL)
-		wgAudit.Go(func() {
+		wgAsyncRoutines.Go(func() {
 			auditToURL.Run(auditCtx)
 		})
 	}
@@ -178,13 +187,16 @@ func run(log *zerolog.Logger) error {
 
 	err = sc.Start(ctx, e) // blocking, HTTP-server running
 
-	// HTTP-server gracefully shut down, ready to disable audit services
+	// HTTP-server gracefully shut down, ready to disable async services
 	time.AfterFunc(10*time.Second, func() {
 		// emergency shutdown in case of stuck
 		auditCancel()
+		deleterCancel()
 	})
 	auditor.Stop()
-	wgAudit.Wait()
+	deleter.Stop()
+
+	wgAsyncRoutines.Wait()
 
 	return err
 }

@@ -24,3 +24,8 @@ vendor/
 
 # Storage files
 data/*
+
+# Confidential
+cert.pem
+key.pem
+config.json

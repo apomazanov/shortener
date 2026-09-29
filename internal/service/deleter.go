@@ -29,7 +29,7 @@ type asyncDeleter struct {
 	repo Repo
 	// batchSize defines size of a batch for delete operation.
 	batchSize int
-	// timeout is a timeout for delete operation.
+	// timeout is a timeout for delete operation (batch flushing).
 	timeout time.Duration
 	// log is a pointer to Logger object.
 	log *zerolog.Logger
@@ -37,8 +37,8 @@ type asyncDeleter struct {
 	chTasks chan deleteTask
 }
 
-// newAsyncDeleter creates and returns a new async deleter object.
-func newAsyncDeleter(repo Repo, cfg *AsyncDeleterConfig, log *zerolog.Logger) *asyncDeleter {
+// NewAsyncDeleter creates and returns a new async deleter object.
+func NewAsyncDeleter(repo Repo, cfg *AsyncDeleterConfig, log *zerolog.Logger) *asyncDeleter {
 	d := &asyncDeleter{
 		repo:      repo,
 		batchSize: cfg.BatchSize,
@@ -46,8 +46,6 @@ func newAsyncDeleter(repo Repo, cfg *AsyncDeleterConfig, log *zerolog.Logger) *a
 		log:       log,
 		chTasks:   make(chan deleteTask, 1000),
 	}
-
-	go d.collect()
 
 	return d
 }
@@ -60,9 +58,8 @@ func (d *asyncDeleter) Enqueue(userID string, aliases []string) {
 	}
 }
 
-// collect provides getting delete requests from queue, packing them into
-// batches and executing.
-func (d *asyncDeleter) collect() {
+// Run provides getting delete requests from queue, packing them into batches and executing.
+func (d *asyncDeleter) Run(ctx context.Context) {
 	batch := make(map[string][]string)
 	aliasesInBatch := 0
 
@@ -84,6 +81,13 @@ func (d *asyncDeleter) collect() {
 
 	for {
 		select {
+		case <-ctx.Done():
+			d.log.Error().
+				Str("op", "deleter.Run").
+				Err(ctx.Err()).
+				Msg("service: async deleter stopped by context")
+			return
+
 		case <-timer.C:
 			flush()
 
@@ -101,6 +105,11 @@ func (d *asyncDeleter) collect() {
 			}
 		}
 	}
+}
+
+// Stop stops deleter activity.
+func (d *asyncDeleter) Stop() {
+	close(d.chTasks)
 }
 
 // flushWithRetries provides data operations executing with retries mechanism.
