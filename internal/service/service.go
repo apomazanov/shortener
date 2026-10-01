@@ -7,7 +7,6 @@ import (
 	"math/rand/v2"
 
 	"github.com/apomazanov/shortener/internal/domain"
-	"github.com/rs/zerolog"
 )
 
 // Repo interface declares repository methods needed for service functionality.
@@ -30,10 +29,10 @@ type Service struct {
 }
 
 // New function returns a pointer to a new Service object.
-func New(repo Repo, asyncDeleterCfg *AsyncDeleterConfig, log *zerolog.Logger) *Service {
+func New(repo Repo, deleter *asyncDeleter) *Service {
 	return &Service{
 		repo:    repo,
-		deleter: newAsyncDeleter(repo, asyncDeleterCfg, log),
+		deleter: deleter,
 	}
 }
 

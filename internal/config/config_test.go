@@ -16,6 +16,7 @@ func TestNew(t *testing.T) {
 		os.Unsetenv("JWT_SECRET")
 		os.Unsetenv("AUDIT_FILE")
 		os.Unsetenv("AUDIT_URL")
+		os.Unsetenv("ENABLE_HTTPS")
 	}
 
 	tests := []struct {
@@ -38,12 +39,13 @@ func TestNew(t *testing.T) {
 				JWTSecret:     "",
 				AuditFile:     "",
 				AuditURL:      "",
+				EnableHTTPS:   false,
 			},
 			wantErr: true,
 		},
 		{
 			name: "flags override defaults",
-			args: []string{"-a", ":9090", "-b", "http://example.com", "-f", "/tmp/test.json", "-d", "postgres://user:pass@localhost:5432/db"},
+			args: []string{"-a", ":9090", "-b", "http://example.com", "-f", "/tmp/test.json", "-d", "postgres://user:pass@localhost:5432/db", "-s"},
 			env: map[string]string{
 				"JWT_SECRET": "secure key",
 			},
@@ -53,6 +55,7 @@ func TestNew(t *testing.T) {
 				StorageFile:   "/tmp/test.json",
 				DatabaseDSN:   "postgres://user:pass@localhost:5432/db",
 				NoDBMigration: false,
+				EnableHTTPS:   true,
 			},
 			wantErr: false,
 		},
@@ -169,6 +172,9 @@ func TestConfigGetters(t *testing.T) {
 		JWTSecret:     "secure key",
 		AuditFile:     "audit/file",
 		AuditURL:      "http://audit.url",
+		EnableHTTPS:   true,
+		CertFile:      "cert.pem",
+		KeyFile:       "key.pem",
 	}
 
 	if cfg.GetServerAddress() != ":1234" {
@@ -190,9 +196,18 @@ func TestConfigGetters(t *testing.T) {
 		t.Errorf("GetJWTSecret() = %v, want %v", cfg.GetJWTSecret(), "secure key")
 	}
 	if cfg.GetAuditFile() != "audit/file" {
-		t.Errorf("GetAuditFile() = %v, want %v", cfg.GetAuditFile(), "secure key")
+		t.Errorf("GetAuditFile() = %v, want %v", cfg.GetAuditFile(), "audit/file")
 	}
 	if cfg.GetAuditURL() != "http://audit.url" {
-		t.Errorf("GetAuditURL() = %v, want %v", cfg.GetAuditURL(), "secure key")
+		t.Errorf("GetAuditURL() = %v, want %v", cfg.GetAuditURL(), "http://audit.url")
+	}
+	if !cfg.IsHTTPSEnabled() {
+		t.Errorf("IsHTTPSEnabled() = %v, want %v", cfg.IsHTTPSEnabled(), true)
+	}
+	if cfg.GetCertFile() != "cert.pem" {
+		t.Errorf("GetCertFile() = %v, want %v", cfg.GetCertFile(), "cert.pem")
+	}
+	if cfg.GetKeyFile() != "key.pem" {
+		t.Errorf("GetKeyFile() = %v, want %v", cfg.GetKeyFile(), "key.pem")
 	}
 }

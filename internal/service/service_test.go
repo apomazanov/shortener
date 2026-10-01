@@ -32,11 +32,7 @@ func createServiceTestContext(t *testing.T) *serviceTestContext {
 		Timeout:   time.Minute,
 	}
 	logger := zerolog.Nop()
-	service := New(repo, &deleterCfg, &logger)
-
-	t.Cleanup(func() {
-		close(service.deleter.chTasks)
-	})
+	service := New(repo, NewAsyncDeleter(repo, &deleterCfg, &logger))
 
 	return &serviceTestContext{
 		ctx:     context.Background(),
@@ -474,6 +470,9 @@ func TestService_DeleteUserURLs(t *testing.T) {
 				return nil
 			}).
 			Times(1)
+
+		done := startDeleter(t, tcx.service.deleter)
+		defer stopDeleter(t, tcx.service.deleter, done)
 
 		err := tcx.service.DeleteUserURLs(tcx.ctx, userID, aliases)
 

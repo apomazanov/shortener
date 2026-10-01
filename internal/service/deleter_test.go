@@ -26,15 +26,34 @@ func createDeleterTestContext(t *testing.T, cfg *AsyncDeleterConfig) *deleterTes
 	repo := mocks.NewMockRepo(ctrl)
 	logger := zerolog.Nop()
 
-	deleter := newAsyncDeleter(repo, cfg, &logger)
-
-	t.Cleanup(func() {
-		close(deleter.chTasks)
-	})
+	deleter := NewAsyncDeleter(repo, cfg, &logger)
 
 	return &deleterTestContext{
 		repo:    repo,
 		deleter: deleter,
+	}
+}
+
+func startDeleter(t *testing.T, d *asyncDeleter) chan struct{} {
+	t.Helper()
+
+	done := make(chan struct{})
+	go func() {
+		d.Run(context.Background())
+		close(done)
+	}()
+
+	return done
+}
+
+func stopDeleter(t *testing.T, d *asyncDeleter, done <-chan struct{}) {
+	t.Helper()
+
+	d.Stop()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("deleter did not stop")
 	}
 }
 
@@ -58,6 +77,9 @@ func TestAsyncDeleter_FlushOnBatchSize(t *testing.T) {
 			return nil
 		}).
 		Times(1)
+
+	done := startDeleter(t, tcx.deleter)
+	defer stopDeleter(t, tcx.deleter, done)
 
 	tcx.deleter.Enqueue("user-1", []string{"alias-1", "alias-2"})
 	tcx.deleter.Enqueue("user-2", []string{"alias-3"})
@@ -92,6 +114,9 @@ func TestAsyncDeleter_FlushOnTimeout(t *testing.T) {
 		}).
 		Times(1)
 
+	done := startDeleter(t, tcx.deleter)
+	defer stopDeleter(t, tcx.deleter, done)
+
 	tcx.deleter.Enqueue("user-1", []string{"alias-1"})
 
 	select {
@@ -124,6 +149,9 @@ func TestAsyncDeleter_GroupsAliasesByUser(t *testing.T) {
 		}).
 		Times(1)
 
+	done := startDeleter(t, tcx.deleter)
+	defer stopDeleter(t, tcx.deleter, done)
+
 	tcx.deleter.Enqueue("user-1", []string{"alias-1", "alias-2"})
 	tcx.deleter.Enqueue("user-2", []string{"alias-3"})
 	tcx.deleter.Enqueue("user-1", []string{"alias-4"})
@@ -136,6 +164,23 @@ func TestAsyncDeleter_GroupsAliasesByUser(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("expected DeleteBatch to be called after batch size limit reached")
 	}
+}
+
+func TestAsyncDeleter_StopFlushesPendingBatch(t *testing.T) {
+	tcx := createDeleterTestContext(t, &AsyncDeleterConfig{BatchSize: 10, Timeout: time.Hour})
+	expected := map[string][]string{"user-1": {"alias-1", "alias-2"}}
+	tcx.repo.EXPECT().DeleteBatch(gomock.Any(), expected).Return(nil).Times(1)
+
+	// Enqueue before starting Run to make the stop path deterministic.
+	tcx.deleter.Enqueue("user-1", []string{"alias-1", "alias-2"})
+	done := startDeleter(t, tcx.deleter)
+	stopDeleter(t, tcx.deleter, done)
+}
+
+func TestAsyncDeleter_StopEmptyQueue(t *testing.T) {
+	tcx := createDeleterTestContext(t, &AsyncDeleterConfig{BatchSize: 10, Timeout: time.Hour})
+	done := startDeleter(t, tcx.deleter)
+	stopDeleter(t, tcx.deleter, done)
 }
 
 func TestAsyncDeleter_FlushWithRetries_SuccessFirstTry(t *testing.T) {
