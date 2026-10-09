@@ -180,7 +180,13 @@ func TestAuditRecorder(t *testing.T) {
 				events <- domain.AuditEvent{UserID: "existing", URL: "existing", Action: "existing"}
 			}
 
-			next := &nextHandlerMock{err: tt.nextErr}
+			var handlerCalled bool
+			next := &nextHandlerMock{
+				handler: func(c *echo.Context) error {
+					handlerCalled = true
+					return tt.expectedErr
+				},
+			}
 
 			handler := AuditRecorder(events, &log)(next.Handler)
 
@@ -199,7 +205,7 @@ func TestAuditRecorder(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			assert.True(t, next.called)
+			assert.True(t, handlerCalled)
 
 			if tt.expectedEvent == nil {
 				assert.Empty(t, events)

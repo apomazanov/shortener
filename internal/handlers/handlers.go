@@ -23,6 +23,7 @@ type BusinessService interface {
 	CreateURLAlias(ctx context.Context, original string, userID string) (alias string, err error)
 	CreateURLAliasBatch(ctx context.Context, originals []string, userID string) (written map[string]string, err error)
 	DeleteUserURLs(ctx context.Context, userID string, aliases []string) error
+	GetStats(ctx context.Context) (domain.Stats, error)
 }
 
 // HealthService defines methods of health-check (ping) service used in handlers.
@@ -519,6 +520,25 @@ func (h *Handler) DeleteUserURLs(c *echo.Context) error {
 	}
 
 	return c.NoContent(http.StatusAccepted)
+}
+
+// GetStats provides response to statistics request. Only trusted IP-addresses will be responded.
+func (h *Handler) GetStats(c *echo.Context) error {
+
+	// Raw context for deeper layers, evading 'echo' dependency
+	ctx := c.Request().Context()
+
+	stats, err := h.business.GetStats(ctx)
+	if err != nil {
+		h.log.Error().
+			Str("op", "handler.GetStats").
+			Err(err).
+			Msg("stats request failed")
+
+		return echo.ErrInternalServerError
+	}
+
+	return c.JSON(http.StatusOK, stats)
 }
 
 // Reject is a handler of all unsupported requests.

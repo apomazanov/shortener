@@ -17,6 +17,7 @@ func TestNew(t *testing.T) {
 		os.Unsetenv("AUDIT_FILE")
 		os.Unsetenv("AUDIT_URL")
 		os.Unsetenv("ENABLE_HTTPS")
+		os.Unsetenv("TRUSTED_SUBNET")
 	}
 
 	tests := []struct {
@@ -175,6 +176,7 @@ func TestConfigGetters(t *testing.T) {
 		EnableHTTPS:   true,
 		CertFile:      "cert.pem",
 		KeyFile:       "key.pem",
+		TrustedSubnet: "192.168.0.0/16",
 	}
 
 	if cfg.GetServerAddress() != ":1234" {
@@ -209,5 +211,8 @@ func TestConfigGetters(t *testing.T) {
 	}
 	if cfg.GetKeyFile() != "key.pem" {
 		t.Errorf("GetKeyFile() = %v, want %v", cfg.GetKeyFile(), "key.pem")
+	}
+	if cfg.GetTrustedSubnet() != "192.168.0.0/16" {
+		t.Errorf("GetTrustedSubnet() = %v, want %v", cfg.GetTrustedSubnet(), "192.168.0.0/16")
 	}
 }

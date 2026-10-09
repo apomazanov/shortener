@@ -18,6 +18,8 @@ type Repo interface {
 	Get(ctx context.Context, alias string) (original string, err error)
 	GetByUser(ctx context.Context, userID string) (data map[string]string, err error)
 	DeleteBatch(ctx context.Context, batch map[string][]string) error
+	GetStats(ctx context.Context) (domain.Stats, error)
+	RefreshStats(ctx context.Context) error
 }
 
 // Service defines main business-logic data object.
@@ -143,4 +145,15 @@ func (s *Service) DeleteUserURLs(ctx context.Context, userID string, aliases []s
 	// ctx will be cancelled after response, not transiting it further
 	s.deleter.Enqueue(userID, aliases)
 	return nil
+}
+
+// GetStatsData returns statistics data
+func (s *Service) GetStats(ctx context.Context) (domain.Stats, error) {
+	stats, err := s.repo.GetStats(ctx)
+
+	if err != nil {
+		return domain.Stats{}, fmt.Errorf("service: cannot get stats data: %w", err)
+	}
+
+	return stats, err
 }

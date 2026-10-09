@@ -8,5 +8,6 @@
   {"audit_url": "audit.host/add"},
   {"enable_https": false},
   {"cert_file": "cert.pem"},
-  {"key_file": "key.pem"}
+  {"key_file": "key.pem"},
+  {"trusted_subnet": "192.168.0.0/16"}
 ]

@@ -38,6 +38,8 @@ type Config struct {
 	KeyFile string `env:"KEY_FILE" envDefault:"key.pem" json:"key_file"`
 	// ConfigFile is a path to application config file in JSON format.
 	ConfigFile string `env:"CONFIG"`
+	// TrustedSubnet is a CIDR of trusted IPs for stats requesting.
+	TrustedSubnet string `env:"TRUSTED_SUBNET" json:"trusted_subnet"`
 }
 
 func (c *Config) applyNewConfig(new *Config) {
@@ -51,6 +53,7 @@ func (c *Config) applyNewConfig(new *Config) {
 	applyStrValue(&c.CertFile, new.CertFile)
 	applyStrValue(&c.KeyFile, new.KeyFile)
 	applyStrValue(&c.ConfigFile, new.ConfigFile)
+	applyStrValue(&c.TrustedSubnet, new.TrustedSubnet)
 
 	c.NoDBMigration = new.NoDBMigration
 	c.EnableHTTPS = new.EnableHTTPS
@@ -73,6 +76,7 @@ func New(args []string) (*Config, error) {
 	fs.BoolVar(&cfgFlags.EnableHTTPS, "s", false, "Enable HTTPS mode")
 	fs.StringVar(&cfgFlags.ConfigFile, "c", cfgFlags.ConfigFile, "Config file path")
 	fs.StringVar(&cfgFlags.ConfigFile, "config", cfgFlags.ConfigFile, "Config file path")
+	fs.StringVar(&cfgFlags.TrustedSubnet, "t", cfgFlags.TrustedSubnet, "Trusted subnet CIDR")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, fmt.Errorf("flags parsing failed: %w", err)
@@ -175,6 +179,11 @@ func (c *Config) GetCertFile() string {
 // GetKeyFile returns path to key file for HTTPs
 func (c *Config) GetKeyFile() string {
 	return c.KeyFile
+}
+
+// GetTrustedSubnet returns value of trusted subnet CIDR
+func (c *Config) GetTrustedSubnet() string {
+	return c.TrustedSubnet
 }
 
 func getConfigFromFile(fileName string) (Config, error) {
