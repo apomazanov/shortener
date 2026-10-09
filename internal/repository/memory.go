@@ -150,3 +150,15 @@ func (r *MemStorage) Ping(ctx context.Context) error {
 func (r *MemStorage) DeleteBatch(ctx context.Context, batch map[string][]string) error {
 	return nil
 }
+
+// GetStats returns statistics data from in-memory storage.
+func (r *MemStorage) GetStats(ctx context.Context) (domain.Stats, error) {
+	// not implemented for this storage
+	return domain.Stats{}, nil
+}
+
+// RefreshStats refreshes statistics data in in-memory storage.
+func (r *MemStorage) RefreshStats(ctx context.Context) error {
+	// not implemented for this storage
+	return nil
+}

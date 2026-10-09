@@ -13,6 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	domain "github.com/apomazanov/shortener/internal/domain"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -97,6 +98,21 @@ func (m *MockBusinessService) GetOriginalURL(ctx context.Context, alias string) 
 func (mr *MockBusinessServiceMockRecorder) GetOriginalURL(ctx, alias any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOriginalURL", reflect.TypeOf((*MockBusinessService)(nil).GetOriginalURL), ctx, alias)
+}
+
+// GetStats mocks base method.
+func (m *MockBusinessService) GetStats(ctx context.Context) (domain.Stats, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetStats", ctx)
+	ret0, _ := ret[0].(domain.Stats)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetStats indicates an expected call of GetStats.
+func (mr *MockBusinessServiceMockRecorder) GetStats(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStats", reflect.TypeOf((*MockBusinessService)(nil).GetStats), ctx)
 }
 
 // GetUserURLs mocks base method.

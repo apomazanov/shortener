@@ -96,11 +96,17 @@ func run(log *zerolog.Logger) error {
 		Timeout:   time.Second * 3,
 	}, log)
 
-	deleterCtx, deleterCancel := context.WithCancel(context.Background())
-	defer deleterCancel()
+	statsUpdater := service.NewStatsUpdater(r, time.Second*20, log)
+
+	asyncServiceCtx, asyncServiceCancel := context.WithCancel(context.Background())
+	defer asyncServiceCancel()
 
 	wgAsyncRoutines.Go(func() {
-		deleter.Run(deleterCtx)
+		deleter.Run(asyncServiceCtx)
+	})
+
+	wgAsyncRoutines.Go(func() {
+		statsUpdater.Run(asyncServiceCtx)
 	})
 
 	s := service.New(r, deleter)
@@ -149,6 +155,7 @@ func run(log *zerolog.Logger) error {
 
 	authMiddleware := my_middleware.Authenticator(&jwtData, log)
 	auditMiddleware := my_middleware.AuditRecorder(auditor.InputChannel(), log)
+	trustedSubnetMiddleware := my_middleware.TrustedSubnetter(cfg.GetTrustedSubnet(), log)
 
 	// Routes
 
@@ -159,6 +166,7 @@ func run(log *zerolog.Logger) error {
 	e.POST("/api/shorten", h.CreateJSON, authMiddleware, auditMiddleware)
 	e.POST("/api/shorten/batch", h.CreateJSONBatch, authMiddleware)
 	e.DELETE("/api/user/urls", h.DeleteUserURLs, authMiddleware)
+	e.GET("/api/internal/stats", h.GetStats, trustedSubnetMiddleware)
 	e.RouteNotFound("/*", h.Reject)
 
 	pprof.Register(e)
@@ -191,10 +199,11 @@ func run(log *zerolog.Logger) error {
 	time.AfterFunc(10*time.Second, func() {
 		// emergency shutdown in case of stuck
 		auditCancel()
-		deleterCancel()
+		asyncServiceCancel()
 	})
 	auditor.Stop()
 	deleter.Stop()
+	statsUpdater.Stop()
 
 	wgAsyncRoutines.Wait()
 

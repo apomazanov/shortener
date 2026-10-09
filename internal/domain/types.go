@@ -11,3 +11,11 @@ type AuditEvent struct {
 	// URL is an original URL that was handled by request.
 	URL string `json:"url"`
 }
+
+// Stats defines statistics data.
+type Stats struct {
+	// Aliases is a quantity of aliases stored in repo.
+	Aliases int `json:"urls"`
+	// Users is a quantity of users that have undeleted aliases in repo.
+	Users int `json:"users"`
+}

@@ -1330,6 +1330,80 @@ func TestHandler_DeleteUserURLsByAlias(t *testing.T) {
 	}
 }
 
+func TestHandler_GetStats(t *testing.T) {
+
+	internalErr := errors.New("repo error")
+
+	tests := []struct {
+		name           string
+		mocksSetup     func(m *mocksContainer)
+		expectedErr    error
+		expectedStatus int
+		expectedBody   string
+	}{
+		{
+			name: "success",
+			mocksSetup: func(m *mocksContainer) {
+				m.service.EXPECT().
+					GetStats(gomock.Any()).
+					Return(domain.Stats{
+						Aliases: 100,
+						Users:   20,
+					}, nil).
+					Times(1)
+			},
+			expectedErr:    nil,
+			expectedStatus: http.StatusOK,
+			expectedBody:   `{"urls": 100, "users": 20}`,
+		},
+		{
+			name: "database error",
+			mocksSetup: func(m *mocksContainer) {
+				m.service.EXPECT().
+					GetStats(gomock.Any()).
+					Return(domain.Stats{}, internalErr).
+					Times(1)
+			},
+			expectedErr:    echo.ErrInternalServerError,
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody:   ``,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tcx := createCtx(t, &ctxOptions{
+				method: http.MethodGet,
+			})
+			m, h := createMocksAndHandler(t)
+
+			if tt.mocksSetup != nil {
+				tt.mocksSetup(m)
+			}
+
+			err := h.GetStats(tcx.ctx)
+
+			if tt.expectedErr != nil {
+				require.Error(t, err)
+				require.ErrorIs(t, err, tt.expectedErr)
+				require.Equal(t, tt.expectedStatus, echo.StatusCode(err))
+			} else {
+				require.NoError(t, err)
+			}
+
+			if err != nil {
+				tcx.e.HTTPErrorHandler(tcx.ctx, err)
+			}
+
+			assert.Equal(t, tt.expectedStatus, tcx.res.Code)
+
+			if tt.expectedStatus == http.StatusOK {
+				assert.JSONEq(t, tt.expectedBody, tcx.res.Body.String())
+			}
+		})
+	}
+}
+
 func BenchmarkGet(b *testing.B) {
 	const validAlias = "abcdef"
 

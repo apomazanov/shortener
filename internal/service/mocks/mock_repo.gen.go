@@ -13,6 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	domain "github.com/apomazanov/shortener/internal/domain"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -82,6 +83,35 @@ func (m *MockRepo) GetByUser(ctx context.Context, userID string) (map[string]str
 func (mr *MockRepoMockRecorder) GetByUser(ctx, userID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByUser", reflect.TypeOf((*MockRepo)(nil).GetByUser), ctx, userID)
+}
+
+// GetStats mocks base method.
+func (m *MockRepo) GetStats(ctx context.Context) (domain.Stats, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetStats", ctx)
+	ret0, _ := ret[0].(domain.Stats)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetStats indicates an expected call of GetStats.
+func (mr *MockRepoMockRecorder) GetStats(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStats", reflect.TypeOf((*MockRepo)(nil).GetStats), ctx)
+}
+
+// RefreshStats mocks base method.
+func (m *MockRepo) RefreshStats(ctx context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RefreshStats", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RefreshStats indicates an expected call of RefreshStats.
+func (mr *MockRepoMockRecorder) RefreshStats(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshStats", reflect.TypeOf((*MockRepo)(nil).RefreshStats), ctx)
 }
 
 // Save mocks base method.
