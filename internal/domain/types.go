@@ -20,38 +20,45 @@ type Stats struct {
 	Users int `json:"users"`
 }
 
-// JsonShortenRequest defines data in shortening request (JSON format).
-type JsonShortenRequest struct {
+// JSONShortenRequest defines data in shortening request (JSON format).
+type JSONShortenRequest struct {
 	// URL is a URL for shortening.
 	URL string `json:"url" validate:"required,url"`
 }
 
-// JsonShortenResponse defines data in shortening response (JSON format).
-type JsonShortenResponse struct {
+// JSONShortenResponse defines data in shortening response (JSON format).
+type JSONShortenResponse struct {
 	// Result is an alias value.
 	Result string `json:"result"`
 }
 
-// JsonBatchRequestItem defines data in shortening request of batch of URLs.
-type JsonBatchRequestItem struct {
+// JSONBatchRequestItem defines data in shortening request of batch of URLs.
+type JSONBatchRequestItem struct {
 	// ID is an identidier of URL for shortening.
 	ID string `json:"correlation_id" validate:"required"`
 	// Original is a URL for shortening.
 	Original string `json:"original_url" validate:"required,url"`
 }
 
-// JsonBatchRequestItem defines data in shortening response of batch of URLs.
-type JsonBatchResponseItem struct {
+// JSONBatchRequestItem defines data in shortening response of batch of URLs.
+type JSONBatchResponseItem struct {
 	// ID is an identidier of URL for shortening.
 	ID string `json:"correlation_id"`
 	// Result is an alias value.
 	Result string `json:"short_url"`
 }
 
-// JsonGetUserURLsResponseItem defines data in response to 'GetUserURLs' request.
-type JsonGetUserURLsResponseItem struct {
+// JSONGetUserURLsResponseItem defines data in response to 'GetUserURLs' request.
+type JSONGetUserURLsResponseItem struct {
 	// ShortURL is an alias value.
 	ShortURL string `json:"short_url"`
 	// OriginalURL is an original URL value.
 	OriginalURL string `json:"original_url"`
 }
+
+// CtxKey used as key values in context.
+type CtxKey string
+
+const UserIDKey CtxKey = "user-id"
+const CookieExistsKey CtxKey = "cookie-exists"
+const TokenExistsKey CtxKey = "token-exists"

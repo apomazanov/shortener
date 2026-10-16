@@ -1,4 +1,4 @@
-package grpc_handlers
+package grpchandlers
 
 import (
 	"context"
@@ -63,7 +63,7 @@ func (s *GRPCServer) ShortenURL(ctx context.Context, req *pb.URLShortenRequest) 
 	original := req.GetUrl()
 
 	// Validating
-	originalToValidate := domain.JsonShortenRequest{URL: original}
+	originalToValidate := domain.JSONShortenRequest{URL: original}
 
 	if err := s.validator.Validate(&originalToValidate); err != nil {
 		return nil, status.Error(codes.InvalidArgument, codes.InvalidArgument.String())

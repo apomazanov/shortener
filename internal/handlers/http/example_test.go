@@ -1,4 +1,4 @@
-package http_handlers_test
+package httphandlers
 
 import (
 	"encoding/json"
@@ -14,7 +14,6 @@ import (
 
 	"github.com/apomazanov/shortener/internal/domain"
 	"github.com/apomazanov/shortener/internal/domain/mocks"
-	http_handler "github.com/apomazanov/shortener/internal/handlers/http"
 	"github.com/apomazanov/shortener/internal/validator"
 )
 
@@ -35,7 +34,7 @@ func (noopT) Logf(_ string, _ ...any)           {}
 func (noopT) Name() string                      { return "example" }
 func (noopT) Setenv(_, _ string)                {}
 
-func setupHandler() (*http_handler.Handler, *mocks.MockBusinessService, *mocks.MockURLConfig, *mocks.MockHealthService, *mocks.MockJWT) {
+func setupHandler() (*Handler, *mocks.MockBusinessService, *mocks.MockURLConfig, *mocks.MockHealthService, *mocks.MockJWT) {
 	ctrl := gomock.NewController(&noopT{})
 
 	svc := mocks.NewMockBusinessService(ctrl)
@@ -44,7 +43,7 @@ func setupHandler() (*http_handler.Handler, *mocks.MockBusinessService, *mocks.M
 	jwt := mocks.NewMockJWT(ctrl)
 
 	log := zerolog.Nop()
-	h := http_handler.New(svc, cfg, &log, health, jwt)
+	h := New(svc, cfg, &log, health, jwt)
 
 	return h, svc, cfg, health, jwt
 }

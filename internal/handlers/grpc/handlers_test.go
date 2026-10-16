@@ -1,4 +1,4 @@
-package grpc_handlers
+package grpchandlers
 
 import (
 	"context"
@@ -59,10 +59,10 @@ func ctxWithAuth(userID any, tokenExists any) context.Context {
 	ctx := context.Background()
 
 	if userID != nil {
-		ctx = context.WithValue(ctx, "user-id", userID)
+		ctx = context.WithValue(ctx, domain.UserIDKey, userID)
 	}
 	if tokenExists != nil {
-		ctx = context.WithValue(ctx, "token-exists", tokenExists)
+		ctx = context.WithValue(ctx, domain.TokenExistsKey, tokenExists)
 	}
 
 	return ctx

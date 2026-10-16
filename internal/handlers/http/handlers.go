@@ -1,4 +1,4 @@
-package http_handlers
+package httphandlers
 
 import (
 	"errors"
@@ -132,10 +132,10 @@ func (h *Handler) GetUserURLs(c *echo.Context) error {
 		return echo.ErrInternalServerError
 	}
 
-	responseData := make([]domain.JsonGetUserURLsResponseItem, 0, len(data))
+	responseData := make([]domain.JSONGetUserURLsResponseItem, 0, len(data))
 
 	for k, v := range data {
-		responseData = append(responseData, domain.JsonGetUserURLsResponseItem{
+		responseData = append(responseData, domain.JSONGetUserURLsResponseItem{
 			ShortURL:    h.cfg.GetURLBase() + "/" + k,
 			OriginalURL: v,
 		})
@@ -198,7 +198,7 @@ func (h *Handler) CreateText(c *echo.Context) error {
 	}
 
 	// Casting body to string, validating
-	requestData := domain.JsonShortenRequest{URL: string(body)}
+	requestData := domain.JSONShortenRequest{URL: string(body)}
 	if err := c.Validate(&requestData); err != nil {
 		return echo.ErrBadRequest
 	}
@@ -240,8 +240,8 @@ func (h *Handler) CreateText(c *echo.Context) error {
 // CreateJSON provides response to POST request of creating alias of certain
 // URL (JSON format).
 func (h *Handler) CreateJSON(c *echo.Context) error {
-	var requestData domain.JsonShortenRequest
-	var responseData domain.JsonShortenResponse
+	var requestData domain.JSONShortenRequest
+	var responseData domain.JSONShortenResponse
 
 	// Cookie
 
@@ -330,7 +330,7 @@ func (h *Handler) CreateJSONBatch(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	// Reading body
-	var requestData []domain.JsonBatchRequestItem
+	var requestData []domain.JSONBatchRequestItem
 
 	if err := c.Bind(&requestData); err != nil {
 		return echo.ErrBadRequest
@@ -375,13 +375,13 @@ func (h *Handler) CreateJSONBatch(c *echo.Context) error {
 	// Filling response
 
 	// Same size as request. Even if there are URLs duplicates, correlation-id is major priority
-	responseData := make([]domain.JsonBatchResponseItem, batchSize)
+	responseData := make([]domain.JSONBatchResponseItem, batchSize)
 
 	for i := range batchSize {
 		original := requestData[i].Original
 		alias := written[original]
 		responseDataResult, _ := url.JoinPath(h.cfg.GetURLBase(), alias)
-		responseData[i] = domain.JsonBatchResponseItem{
+		responseData[i] = domain.JSONBatchResponseItem{
 			ID:     requestData[i].ID,
 			Result: responseDataResult,
 		}
