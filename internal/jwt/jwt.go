@@ -28,9 +28,8 @@ type Claims struct {
 	UserID string
 }
 
-// CreateCookieWithUserID creates a new cookie object for certain user.
-func (d *Data) CreateCookieWithUserID(userID string) (*http.Cookie, error) {
-
+// CreateTokenWithUserID creates a new token value for certain user.
+func (d *Data) CreateTokenWithUserID(userID string) (string, error) {
 	claims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(d.TokenTTL)),
@@ -42,7 +41,18 @@ func (d *Data) CreateCookieWithUserID(userID string) (*http.Cookie, error) {
 
 	newTokenString, err := newToken.SignedString(d.SigningKey)
 	if err != nil {
-		return nil, fmt.Errorf("jwt: failed signing token: %w", err)
+		return "", fmt.Errorf("jwt: failed signing token: %w", err)
+	}
+
+	return newTokenString, nil
+}
+
+// CreateCookieWithUserID creates a new cookie object for certain user.
+func (d *Data) CreateCookieWithUserID(userID string) (*http.Cookie, error) {
+
+	newTokenString, err := d.CreateTokenWithUserID(userID)
+	if err != nil {
+		return nil, err
 	}
 
 	return &http.Cookie{

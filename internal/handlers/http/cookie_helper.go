@@ -1,9 +1,10 @@
-package handlers
+package http_handlers
 
 import (
 	"fmt"
 	"net/http"
 
+	"github.com/apomazanov/shortener/internal/domain"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 )
@@ -26,7 +27,7 @@ type cookieData struct {
 
 // handleCookie handles cookie object and fills data to cookieData.
 // If received cookie is OK, newCookie and newUserID are nil and ""
-func handleCookie(c *echo.Context, jwt JWT) *cookieData {
+func handleCookie(c *echo.Context, jwt domain.JWT) *cookieData {
 
 	var result cookieData
 	var ok bool
