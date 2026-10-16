@@ -1,4 +1,4 @@
-package handlers
+package httphandlers
 
 import (
 	"encoding/json"
@@ -15,7 +15,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/apomazanov/shortener/internal/domain"
-	"github.com/apomazanov/shortener/internal/handlers/mocks"
+	"github.com/apomazanov/shortener/internal/domain/mocks"
 	"github.com/apomazanov/shortener/internal/validator"
 )
 
@@ -256,7 +256,7 @@ func TestHandler_GetUserURLs(t *testing.T) {
 		mocksSetup       func(m *mocksContainer)
 		expectedErr      error
 		expectedStatus   int
-		expectedResponse []jsonGetUserURLsResponseItem
+		expectedResponse []domain.JSONGetUserURLsResponseItem
 	}{
 		{
 			name:   "success",
@@ -277,7 +277,7 @@ func TestHandler_GetUserURLs(t *testing.T) {
 			},
 			expectedErr:    nil,
 			expectedStatus: http.StatusOK,
-			expectedResponse: []jsonGetUserURLsResponseItem{
+			expectedResponse: []domain.JSONGetUserURLsResponseItem{
 				{
 					ShortURL:    baseURL + "/alias1",
 					OriginalURL: "original1",
@@ -387,7 +387,7 @@ func TestHandler_GetUserURLs(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, tcx.res.Code)
 
 			if tt.expectedStatus == http.StatusOK {
-				var received []jsonGetUserURLsResponseItem
+				var received []domain.JSONGetUserURLsResponseItem
 
 				require.NoError(t, json.Unmarshal(tcx.res.Body.Bytes(), &received))
 				assert.ElementsMatch(t, tt.expectedResponse, received)
@@ -594,7 +594,7 @@ func TestHandler_CreateText(t *testing.T) {
 	}
 }
 
-func TestHandler_CreateJson(t *testing.T) {
+func TestHandler_CreateJSON(t *testing.T) {
 	const (
 		validUserID = "123e4567-e89b-42d3-a456-426614174000"
 		validURL    = "http://example.com/original"
@@ -609,7 +609,7 @@ func TestHandler_CreateJson(t *testing.T) {
 		mocksSetup        func(m *mocksContainer)
 		expectedErr       error
 		expectedStatus    int
-		expectedResponse  jsonShortenResponse
+		expectedResponse  domain.JSONShortenResponse
 		expectedSetCookie bool
 	}{
 		{
@@ -629,7 +629,7 @@ func TestHandler_CreateJson(t *testing.T) {
 			},
 			expectedErr:       nil,
 			expectedStatus:    http.StatusCreated,
-			expectedResponse:  jsonShortenResponse{Result: baseURL + "/" + alias},
+			expectedResponse:  domain.JSONShortenResponse{Result: baseURL + "/" + alias},
 			expectedSetCookie: false,
 		},
 		{
@@ -657,7 +657,7 @@ func TestHandler_CreateJson(t *testing.T) {
 			},
 			expectedErr:       nil,
 			expectedStatus:    http.StatusCreated,
-			expectedResponse:  jsonShortenResponse{Result: baseURL + "/" + alias},
+			expectedResponse:  domain.JSONShortenResponse{Result: baseURL + "/" + alias},
 			expectedSetCookie: true,
 		},
 		{
@@ -671,7 +671,7 @@ func TestHandler_CreateJson(t *testing.T) {
 			},
 			expectedErr:       echo.ErrBadRequest,
 			expectedStatus:    http.StatusBadRequest,
-			expectedResponse:  jsonShortenResponse{},
+			expectedResponse:  domain.JSONShortenResponse{},
 			expectedSetCookie: false,
 		},
 		{
@@ -685,7 +685,7 @@ func TestHandler_CreateJson(t *testing.T) {
 			},
 			expectedErr:       echo.ErrBadRequest,
 			expectedStatus:    http.StatusBadRequest,
-			expectedResponse:  jsonShortenResponse{},
+			expectedResponse:  domain.JSONShortenResponse{},
 			expectedSetCookie: false,
 		},
 		{
@@ -699,7 +699,7 @@ func TestHandler_CreateJson(t *testing.T) {
 			},
 			expectedErr:       echo.ErrInternalServerError,
 			expectedStatus:    http.StatusInternalServerError,
-			expectedResponse:  jsonShortenResponse{},
+			expectedResponse:  domain.JSONShortenResponse{},
 			expectedSetCookie: false,
 		},
 		{
@@ -727,7 +727,7 @@ func TestHandler_CreateJson(t *testing.T) {
 			},
 			expectedErr:       nil,
 			expectedStatus:    http.StatusCreated,
-			expectedResponse:  jsonShortenResponse{Result: baseURL + "/" + alias},
+			expectedResponse:  domain.JSONShortenResponse{Result: baseURL + "/" + alias},
 			expectedSetCookie: true,
 		},
 		{
@@ -747,7 +747,7 @@ func TestHandler_CreateJson(t *testing.T) {
 			},
 			expectedErr:       nil,
 			expectedStatus:    http.StatusConflict,
-			expectedResponse:  jsonShortenResponse{Result: baseURL + "/" + alias},
+			expectedResponse:  domain.JSONShortenResponse{Result: baseURL + "/" + alias},
 			expectedSetCookie: false,
 		},
 		{
@@ -762,7 +762,7 @@ func TestHandler_CreateJson(t *testing.T) {
 			},
 			expectedErr:       echo.ErrInternalServerError,
 			expectedStatus:    http.StatusInternalServerError,
-			expectedResponse:  jsonShortenResponse{},
+			expectedResponse:  domain.JSONShortenResponse{},
 			expectedSetCookie: false,
 		},
 		{
@@ -782,7 +782,7 @@ func TestHandler_CreateJson(t *testing.T) {
 			},
 			expectedErr:       echo.ErrInternalServerError,
 			expectedStatus:    http.StatusInternalServerError,
-			expectedResponse:  jsonShortenResponse{},
+			expectedResponse:  domain.JSONShortenResponse{},
 			expectedSetCookie: false,
 		},
 	}
@@ -819,7 +819,7 @@ func TestHandler_CreateJson(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, tcx.res.Code)
 
 			if tt.expectedResponse.Result != "" {
-				var received jsonShortenResponse
+				var received domain.JSONShortenResponse
 
 				require.NoError(t, json.Unmarshal(tcx.res.Body.Bytes(), &received))
 				assert.Equal(t, tt.expectedResponse, received)
@@ -834,7 +834,7 @@ func TestHandler_CreateJson(t *testing.T) {
 	}
 }
 
-func TestHandler_CreateJsonBatch(t *testing.T) {
+func TestHandler_CreateJSONBatch(t *testing.T) {
 	const (
 		validUserID = "123e4567-e89b-42d3-a456-426614174000"
 		baseURL     = "http://shortener"
@@ -857,7 +857,7 @@ func TestHandler_CreateJsonBatch(t *testing.T) {
 		}
 	]`
 
-	expectedSuccessResponse := []jsonBatchResponseItem{
+	expectedSuccessResponse := []domain.JSONBatchResponseItem{
 		{
 			ID:     "id-1",
 			Result: baseURL + "/" + alias1,
@@ -875,7 +875,7 @@ func TestHandler_CreateJsonBatch(t *testing.T) {
 		mocksSetup        func(m *mocksContainer)
 		expectedErr       error
 		expectedStatus    int
-		expectedResponse  []jsonBatchResponseItem
+		expectedResponse  []domain.JSONBatchResponseItem
 		expectedSetCookie bool
 	}{
 		{
@@ -1152,7 +1152,7 @@ func TestHandler_CreateJsonBatch(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, tcx.res.Code)
 
 			if len(tt.expectedResponse) > 0 {
-				var received []jsonBatchResponseItem
+				var received []domain.JSONBatchResponseItem
 
 				require.NoError(t, json.Unmarshal(tcx.res.Body.Bytes(), &received))
 				assert.Equal(t, tt.expectedResponse, received)
@@ -1330,6 +1330,80 @@ func TestHandler_DeleteUserURLsByAlias(t *testing.T) {
 	}
 }
 
+func TestHandler_GetStats(t *testing.T) {
+
+	internalErr := errors.New("repo error")
+
+	tests := []struct {
+		name           string
+		mocksSetup     func(m *mocksContainer)
+		expectedErr    error
+		expectedStatus int
+		expectedBody   string
+	}{
+		{
+			name: "success",
+			mocksSetup: func(m *mocksContainer) {
+				m.service.EXPECT().
+					GetStats(gomock.Any()).
+					Return(domain.Stats{
+						Aliases: 100,
+						Users:   20,
+					}, nil).
+					Times(1)
+			},
+			expectedErr:    nil,
+			expectedStatus: http.StatusOK,
+			expectedBody:   `{"urls": 100, "users": 20}`,
+		},
+		{
+			name: "database error",
+			mocksSetup: func(m *mocksContainer) {
+				m.service.EXPECT().
+					GetStats(gomock.Any()).
+					Return(domain.Stats{}, internalErr).
+					Times(1)
+			},
+			expectedErr:    echo.ErrInternalServerError,
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody:   ``,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tcx := createCtx(t, &ctxOptions{
+				method: http.MethodGet,
+			})
+			m, h := createMocksAndHandler(t)
+
+			if tt.mocksSetup != nil {
+				tt.mocksSetup(m)
+			}
+
+			err := h.GetStats(tcx.ctx)
+
+			if tt.expectedErr != nil {
+				require.Error(t, err)
+				require.ErrorIs(t, err, tt.expectedErr)
+				require.Equal(t, tt.expectedStatus, echo.StatusCode(err))
+			} else {
+				require.NoError(t, err)
+			}
+
+			if err != nil {
+				tcx.e.HTTPErrorHandler(tcx.ctx, err)
+			}
+
+			assert.Equal(t, tt.expectedStatus, tcx.res.Code)
+
+			if tt.expectedStatus == http.StatusOK {
+				assert.JSONEq(t, tt.expectedBody, tcx.res.Body.String())
+			}
+		})
+	}
+}
+
 func BenchmarkGet(b *testing.B) {
 	const validAlias = "abcdef"
 
@@ -1455,7 +1529,7 @@ func BenchmarkCreateJSON(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	var decoded jsonShortenResponse
+	var decoded domain.JSONShortenResponse
 	if err := json.Unmarshal([]byte(`{"result":"`+baseURL+"/"+alias+`"}`), &decoded); err != nil {
 		b.Fatal(err)
 	}
@@ -1484,7 +1558,7 @@ func BenchmarkCreateJSON(b *testing.B) {
 			b.Fatalf("unexpected status: %d", res.Code)
 		}
 
-		var received jsonShortenResponse
+		var received domain.JSONShortenResponse
 		if err := json.Unmarshal(res.Body.Bytes(), &received); err != nil {
 			b.Fatal(err)
 		}

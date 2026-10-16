@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,17 +17,20 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/rs/zerolog"
+	"google.golang.org/grpc"
 
 	"github.com/apomazanov/shortener/internal/audit"
 	"github.com/apomazanov/shortener/internal/config"
-	"github.com/apomazanov/shortener/internal/handlers"
 	"github.com/apomazanov/shortener/internal/repository"
 	"github.com/apomazanov/shortener/internal/service"
 	"github.com/apomazanov/shortener/internal/validator"
 	"github.com/apomazanov/shortener/pkg/logger"
 
+	grpc_handlers "github.com/apomazanov/shortener/internal/handlers/grpc"
+	http_handler "github.com/apomazanov/shortener/internal/handlers/http"
 	my_jwt "github.com/apomazanov/shortener/internal/jwt"
 	my_middleware "github.com/apomazanov/shortener/internal/middleware"
+	pb "github.com/apomazanov/shortener/pkg/api/proto/v1"
 )
 
 var (
@@ -52,6 +56,7 @@ func run(log *zerolog.Logger) error {
 	}
 
 	var wgAsyncRoutines sync.WaitGroup
+	var wgServers sync.WaitGroup
 
 	// Repository
 
@@ -96,19 +101,27 @@ func run(log *zerolog.Logger) error {
 		Timeout:   time.Second * 3,
 	}, log)
 
-	deleterCtx, deleterCancel := context.WithCancel(context.Background())
-	defer deleterCancel()
+	statsUpdater := service.NewStatsUpdater(r, time.Second*20, log)
+
+	asyncServiceCtx, asyncServiceCancel := context.WithCancel(context.Background())
+	defer asyncServiceCancel()
 
 	wgAsyncRoutines.Go(func() {
-		deleter.Run(deleterCtx)
+		deleter.Run(asyncServiceCtx)
+	})
+
+	wgAsyncRoutines.Go(func() {
+		statsUpdater.Run(asyncServiceCtx)
 	})
 
 	s := service.New(r, deleter)
 
-	h := handlers.New(s, cfg, log, r, &jwtData)
+	h := http_handler.New(s, cfg, log, r, &jwtData)
+
+	v := validator.New()
 
 	e := echo.New()
-	e.Validator = validator.New()
+	e.Validator = v
 
 	// Audit
 
@@ -149,6 +162,7 @@ func run(log *zerolog.Logger) error {
 
 	authMiddleware := my_middleware.Authenticator(&jwtData, log)
 	auditMiddleware := my_middleware.AuditRecorder(auditor.InputChannel(), log)
+	trustedSubnetMiddleware := my_middleware.TrustedSubnetter(cfg.GetTrustedSubnet(), log)
 
 	// Routes
 
@@ -159,9 +173,21 @@ func run(log *zerolog.Logger) error {
 	e.POST("/api/shorten", h.CreateJSON, authMiddleware, auditMiddleware)
 	e.POST("/api/shorten/batch", h.CreateJSONBatch, authMiddleware)
 	e.DELETE("/api/user/urls", h.DeleteUserURLs, authMiddleware)
+	e.GET("/api/internal/stats", h.GetStats, trustedSubnetMiddleware)
 	e.RouteNotFound("/*", h.Reject)
 
 	pprof.Register(e)
+
+	// gRPC server
+
+	gRPCListen, err := net.Listen("tcp", cfg.GetGRPCServerAddr())
+	if err != nil {
+		return fmt.Errorf("run: failed to run gRPC listener: %w", err)
+	}
+
+	gRPCShortenService := grpc_handlers.New(s, cfg, log, &jwtData, v)
+	gRPCServer := grpc.NewServer()
+	pb.RegisterShortenerServiceServer(gRPCServer, gRPCShortenService)
 
 	// Graceful shutdown
 
@@ -185,16 +211,55 @@ func run(log *zerolog.Logger) error {
 		}
 	}
 
-	err = sc.Start(ctx, e) // blocking, HTTP-server running
+	wgServers.Go(func() {
 
-	// HTTP-server gracefully shut down, ready to disable async services
+		go func() {
+			<-ctx.Done()
+
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			stopped := make(chan struct{})
+
+			// gRPCServer.GracefulStop() can be blocked forever, so using goroutine
+			go func() {
+				gRPCServer.GracefulStop()
+				close(stopped)
+			}()
+
+			select {
+			case <-stopped:
+			case <-shutdownCtx.Done():
+				gRPCServer.Stop()
+			}
+		}()
+
+		if err := gRPCServer.Serve(gRPCListen); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+			log.Error().
+				Err(err).
+				Msg("run: gRPC-server stopped with error")
+		}
+	})
+
+	wgServers.Go(func() {
+		if err := sc.Start(ctx, e); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error().
+				Err(err).
+				Msg("run: HTTP-server stopped with error")
+		}
+	})
+
+	wgServers.Wait()
+
+	// HTTP and gRPC servers gracefully shut down, ready to disable async services
 	time.AfterFunc(10*time.Second, func() {
 		// emergency shutdown in case of stuck
 		auditCancel()
-		deleterCancel()
+		asyncServiceCancel()
 	})
 	auditor.Stop()
 	deleter.Stop()
+	statsUpdater.Stop()
 
 	wgAsyncRoutines.Wait()
 

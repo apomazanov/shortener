@@ -400,3 +400,59 @@ func TestPostgresStorage_GetByUser(t *testing.T) {
 		assert.NoError(t, tcx.mock.ExpectationsWereMet())
 	})
 }
+
+func TestPostgresStorage_GetStats(t *testing.T) {
+
+	t.Run("success", func(t *testing.T) {
+		tcx := createPostgresTestContext(t)
+
+		tcx.mock.ExpectQuery("(?s)SELECT aliases, users\\s+FROM stats").
+			WillReturnRows(pgxmock.NewRows([]string{"aliases", "users"}).AddRow(100, 20))
+
+		res, err := tcx.repo.GetStats(context.Background())
+
+		require.NoError(t, err)
+		assert.Equal(t, res, domain.Stats{Aliases: 100, Users: 20})
+		assert.NoError(t, tcx.mock.ExpectationsWereMet())
+	})
+
+	t.Run("query error", func(t *testing.T) {
+		tcx := createPostgresTestContext(t)
+
+		tcx.mock.ExpectQuery("(?s)SELECT aliases, users\\s+FROM stats").
+			WillReturnError(errors.New("scan error"))
+
+		res, err := tcx.repo.GetStats(context.Background())
+
+		require.ErrorContains(t, err, "repo: failed to get stats")
+		assert.Equal(t, res, domain.Stats{})
+		assert.NoError(t, tcx.mock.ExpectationsWereMet())
+	})
+}
+
+func TestPostgresStorage_RefreshStats(t *testing.T) {
+
+	t.Run("success", func(t *testing.T) {
+		tcx := createPostgresTestContext(t)
+
+		tcx.mock.ExpectExec("(?s)REFRESH MATERIALIZED VIEW CONCURRENTLY stats").
+			WillReturnResult(pgxmock.NewResult("REFRESH MATERIALIZED VIEW", 0))
+
+		err := tcx.repo.RefreshStats(context.Background())
+
+		require.NoError(t, err)
+		assert.NoError(t, tcx.mock.ExpectationsWereMet())
+	})
+
+	t.Run("query error", func(t *testing.T) {
+		tcx := createPostgresTestContext(t)
+
+		tcx.mock.ExpectExec("(?s)REFRESH MATERIALIZED VIEW CONCURRENTLY stats").
+			WillReturnError(errors.New("scan error"))
+
+		err := tcx.repo.RefreshStats(context.Background())
+
+		require.ErrorContains(t, err, "repo: failed to refresh stats")
+		assert.NoError(t, tcx.mock.ExpectationsWereMet())
+	})
+}

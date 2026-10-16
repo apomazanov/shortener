@@ -488,3 +488,59 @@ func TestService_DeleteUserURLs(t *testing.T) {
 		}
 	})
 }
+
+func TestService_GetStats(t *testing.T) {
+
+	internalErr := errors.New("repo error")
+
+	tests := []struct {
+		name         string
+		mocksSetup   func(repo *mocks.MockRepo)
+		expectedData domain.Stats
+		expectedErr  error
+	}{
+		{
+			name: "success",
+			mocksSetup: func(repo *mocks.MockRepo) {
+				repo.EXPECT().
+					GetStats(gomock.Any()).
+					Return(domain.Stats{
+						Aliases: 100,
+						Users:   20,
+					}, nil).
+					Times(1)
+			},
+			expectedData: domain.Stats{
+				Aliases: 100,
+				Users:   20,
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "database error",
+			mocksSetup: func(repo *mocks.MockRepo) {
+				repo.EXPECT().
+					GetStats(gomock.Any()).
+					Return(domain.Stats{}, internalErr).
+					Times(1)
+			},
+			expectedData: domain.Stats{},
+			expectedErr:  internalErr,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tcx := createServiceTestContext(t)
+
+			if tt.mocksSetup != nil {
+				tt.mocksSetup(tcx.repo)
+			}
+
+			data, err := tcx.service.GetStats(tcx.ctx)
+
+			assertServiceErr(t, err, tt.expectedErr)
+			assert.Equal(t, tt.expectedData, data)
+		})
+	}
+}
