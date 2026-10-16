@@ -14,7 +14,7 @@ import (
 
 // Config contains application configuration parameters.
 type Config struct {
-	// ServerAddr is this app address.
+	// ServerAddr is an address of HTTP-service of this app.
 	ServerAddr string `env:"SERVER_ADDRESS" json:"server_address"`
 	// BaseURL is a base URL for aliases.
 	BaseURL string `env:"BASE_URL" json:"base_url"`
@@ -40,6 +40,8 @@ type Config struct {
 	ConfigFile string `env:"CONFIG"`
 	// TrustedSubnet is a CIDR of trusted IPs for stats requesting.
 	TrustedSubnet string `env:"TRUSTED_SUBNET" json:"trusted_subnet"`
+	// GRPCServerAddr is an address of gRPC-service of this app.
+	GRPCServerAddr string `env:"GRPC_SERVER_ADDRESS" json:"grpc_server_address"`
 }
 
 func (c *Config) applyNewConfig(new *Config) {
@@ -54,6 +56,7 @@ func (c *Config) applyNewConfig(new *Config) {
 	applyStrValue(&c.KeyFile, new.KeyFile)
 	applyStrValue(&c.ConfigFile, new.ConfigFile)
 	applyStrValue(&c.TrustedSubnet, new.TrustedSubnet)
+	applyStrValue(&c.GRPCServerAddr, new.GRPCServerAddr)
 
 	c.NoDBMigration = new.NoDBMigration
 	c.EnableHTTPS = new.EnableHTTPS
@@ -77,6 +80,7 @@ func New(args []string) (*Config, error) {
 	fs.StringVar(&cfgFlags.ConfigFile, "c", cfgFlags.ConfigFile, "Config file path")
 	fs.StringVar(&cfgFlags.ConfigFile, "config", cfgFlags.ConfigFile, "Config file path")
 	fs.StringVar(&cfgFlags.TrustedSubnet, "t", cfgFlags.TrustedSubnet, "Trusted subnet CIDR")
+	fs.StringVar(&cfgFlags.GRPCServerAddr, "grpc-addr", cfgFlags.GRPCServerAddr, "gRPC-server address:port")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, fmt.Errorf("flags parsing failed: %w", err)
@@ -104,8 +108,9 @@ func New(args []string) (*Config, error) {
 	// Setting configuration data from all sources. Source with higher priority overwrites previous values.
 
 	cfg := Config{
-		ServerAddr: ":8080",
-		BaseURL:    "http://localhost:8080",
+		ServerAddr:     ":8080",
+		BaseURL:        "http://localhost:8080",
+		GRPCServerAddr: ":8090",
 	}
 
 	cfg.applyNewConfig(&cfgJSON)
@@ -184,6 +189,11 @@ func (c *Config) GetKeyFile() string {
 // GetTrustedSubnet returns value of trusted subnet CIDR
 func (c *Config) GetTrustedSubnet() string {
 	return c.TrustedSubnet
+}
+
+// GetGRPCServerAddr returns value of gRPC-servie address
+func (c *Config) GetGRPCServerAddr() string {
+	return c.GRPCServerAddr
 }
 
 func getConfigFromFile(fileName string) (Config, error) {

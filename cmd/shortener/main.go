@@ -180,7 +180,7 @@ func run(log *zerolog.Logger) error {
 
 	// gRPC server
 
-	gRPCListen, err := net.Listen("tcp", ":3200")
+	gRPCListen, err := net.Listen("tcp", cfg.GetGRPCServerAddr())
 	if err != nil {
 		return fmt.Errorf("run: failed to run gRPC listener: %w", err)
 	}
