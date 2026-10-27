@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/apomazanov/shortener/internal/domain"
+	"github.com/apomazanov/shortener/internal/handlers"
 	"github.com/apomazanov/shortener/internal/validator"
 	pb "github.com/apomazanov/shortener/pkg/api/proto/v1"
 	"github.com/rs/zerolog"
@@ -63,7 +64,7 @@ func (s *GRPCServer) ShortenURL(ctx context.Context, req *pb.URLShortenRequest) 
 	original := req.GetUrl()
 
 	// Validating
-	originalToValidate := domain.JSONShortenRequest{URL: original}
+	originalToValidate := handlers.JSONShortenRequest{URL: original}
 
 	if err := s.validator.Validate(&originalToValidate); err != nil {
 		return nil, status.Error(codes.InvalidArgument, codes.InvalidArgument.String())

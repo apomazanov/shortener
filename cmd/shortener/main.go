@@ -162,7 +162,13 @@ func run(log *zerolog.Logger) error {
 
 	authMiddleware := my_middleware.Authenticator(&jwtData, log)
 	auditMiddleware := my_middleware.AuditRecorder(auditor.InputChannel(), log)
-	trustedSubnetMiddleware := my_middleware.TrustedSubnetter(cfg.GetTrustedSubnet(), log)
+
+	trustedSubnetMiddleware, err := my_middleware.TrustedSubnetter(cfg.GetTrustedSubnet(), log)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Msg("run: failed to initialize TrustedSubnetter middleware")
+	}
 
 	// Routes
 
@@ -186,7 +192,8 @@ func run(log *zerolog.Logger) error {
 	}
 
 	gRPCShortenService := grpc_handlers.New(s, cfg, log, &jwtData, v)
-	gRPCServer := grpc.NewServer()
+	gRPCAuthInterceptor := my_middleware.NewAuthInterceptor(&jwtData, log)
+	gRPCServer := grpc.NewServer(grpc.UnaryInterceptor(gRPCAuthInterceptor))
 	pb.RegisterShortenerServiceServer(gRPCServer, gRPCShortenService)
 
 	// Graceful shutdown

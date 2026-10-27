@@ -19,49 +19,56 @@ func TestTrustedSubnetter(t *testing.T) {
 		name                  string
 		trustedSubnet         string
 		xRealIPHeader         string
-		expectedErr           error
+		expectedCreationErr   error
+		expectedMiddlewareErr error
 		expectedHandlerCalled bool
 	}{
 		{
 			name:                  "access granted",
 			trustedSubnet:         "192.168.1.0/24",
 			xRealIPHeader:         "192.168.1.1",
-			expectedErr:           nil,
+			expectedCreationErr:   nil,
+			expectedMiddlewareErr: nil,
 			expectedHandlerCalled: true,
 		},
 		{
 			name:                  "ip outside trusted subnet",
 			trustedSubnet:         "192.168.1.0/24",
 			xRealIPHeader:         "192.168.2.1",
-			expectedErr:           echo.ErrForbidden,
+			expectedCreationErr:   nil,
+			expectedMiddlewareErr: echo.ErrForbidden,
 			expectedHandlerCalled: false,
 		},
 		{
 			name:                  "empty trusted subnet",
 			trustedSubnet:         "",
 			xRealIPHeader:         "192.168.1.1",
-			expectedErr:           echo.ErrForbidden,
+			expectedCreationErr:   echo.ErrForbidden,
+			expectedMiddlewareErr: nil,
 			expectedHandlerCalled: false,
 		},
 		{
 			name:                  "empty header",
 			trustedSubnet:         "192.168.1.0/24",
 			xRealIPHeader:         "",
-			expectedErr:           echo.ErrForbidden,
+			expectedCreationErr:   nil,
+			expectedMiddlewareErr: echo.ErrForbidden,
 			expectedHandlerCalled: false,
 		},
 		{
 			name:                  "invalid header value",
 			trustedSubnet:         "192.168.1.0/24",
 			xRealIPHeader:         "garbage",
-			expectedErr:           echo.ErrForbidden,
+			expectedCreationErr:   nil,
+			expectedMiddlewareErr: echo.ErrForbidden,
 			expectedHandlerCalled: false,
 		},
 		{
 			name:                  "invalid trusted subnet value",
 			trustedSubnet:         "garbage",
 			xRealIPHeader:         "192.168.1.1",
-			expectedErr:           echo.ErrForbidden,
+			expectedCreationErr:   echo.ErrForbidden,
+			expectedMiddlewareErr: nil,
 			expectedHandlerCalled: false,
 		},
 	}
@@ -87,16 +94,24 @@ func TestTrustedSubnetter(t *testing.T) {
 				},
 			}
 
-			handler := TrustedSubnetter(tt.trustedSubnet, &log)(next.Handler)
-			err := handler(ctx)
+			subnetter, errCreate := TrustedSubnetter(tt.trustedSubnet, &log)
+			handler := subnetter(next.Handler)
+			errHandler := handler(ctx)
 
-			if tt.expectedErr != nil {
-				require.Error(t, err)
+			if tt.expectedCreationErr != nil {
+				require.Error(t, errCreate)
+				require.Error(t, errHandler)
 			} else {
-				require.NoError(t, err)
+				require.NoError(t, errCreate)
+
+				if tt.expectedMiddlewareErr != nil {
+					require.Error(t, errHandler)
+				} else {
+					require.NoError(t, errHandler)
+				}
+				assert.Equal(t, tt.expectedHandlerCalled, handlerCalled)
 			}
 
-			assert.Equal(t, tt.expectedHandlerCalled, handlerCalled)
 		})
 	}
 }

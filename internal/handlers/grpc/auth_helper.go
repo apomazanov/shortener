@@ -6,6 +6,8 @@ import (
 
 	"github.com/apomazanov/shortener/internal/domain"
 	"github.com/google/uuid"
+
+	my_middleware "github.com/apomazanov/shortener/internal/middleware"
 )
 
 // authData contains data for authorization process.
@@ -63,7 +65,7 @@ func handleAuthData(ctx context.Context, jwt domain.JWT) *authData {
 // extractUserIDFromCtx helps to extract user-id value from context.
 func extractUserIDFromCtx(ctx context.Context) (userID string, ok bool) {
 
-	userIDAny := ctx.Value(domain.UserIDKey)
+	userIDAny := ctx.Value(my_middleware.UserIDKey)
 
 	if userIDAny == nil {
 		// missing
@@ -77,7 +79,7 @@ func extractUserIDFromCtx(ctx context.Context) (userID string, ok bool) {
 // extractTokenExistsFromCtx helps to extract value of parameter 'token-exists' from context.
 func extractTokenExistsFromCtx(ctx context.Context) (exists bool, ok bool) {
 
-	existsAny := ctx.Value(domain.TokenExistsKey)
+	existsAny := ctx.Value(my_middleware.TokenExistsKey)
 
 	if existsAny == nil {
 		// missing

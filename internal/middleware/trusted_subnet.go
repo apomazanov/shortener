@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/netip"
 
 	"github.com/labstack/echo/v5"
@@ -8,7 +9,18 @@ import (
 )
 
 // TrustedSubnetter provides subnet check for incoming requests.
-func TrustedSubnetter(subnetStr string, log *zerolog.Logger) echo.MiddlewareFunc {
+func TrustedSubnetter(subnetStr string, log *zerolog.Logger) (echo.MiddlewareFunc, error) {
+
+	subnet, err := netip.ParsePrefix(subnetStr)
+	if err != nil {
+		return func(next echo.HandlerFunc) echo.HandlerFunc {
+			return func(c *echo.Context) error {
+				// Will return error responsing all requests
+				return echo.ErrForbidden
+			}
+		}, fmt.Errorf("failed parsing subnet string: %w", err)
+	}
+
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
 
@@ -28,20 +40,11 @@ func TrustedSubnetter(subnetStr string, log *zerolog.Logger) echo.MiddlewareFunc
 				return echo.ErrForbidden
 			}
 
-			subnet, err := netip.ParsePrefix(subnetStr)
-			if err != nil {
-				log.Error().
-					Err(err).
-					Msg("trusted subnet: failed parsing config")
-
-				return echo.ErrForbidden
-			}
-
 			if !subnet.Contains(ip) {
 				return echo.ErrForbidden
 			}
 
 			return next(c)
 		}
-	}
+	}, nil
 }

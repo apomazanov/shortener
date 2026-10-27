@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -17,6 +18,8 @@ type statsUpdater struct {
 	log *zerolog.Logger
 	// chOff is a channel for shutdown procedure initiation.
 	chOff chan struct{}
+	// stopOnce used for safe repeated Stop executing
+	stopOnce sync.Once
 }
 
 // NewStatsUpdater constructs a new statsUpdater object.
@@ -62,8 +65,7 @@ func (u *statsUpdater) Run(ctx context.Context) {
 
 // Stop provides proper operation shutdown.
 func (u *statsUpdater) Stop() {
-	select {
-	case u.chOff <- struct{}{}:
-	default:
-	}
+	u.stopOnce.Do(func() {
+		close(u.chOff)
+	})
 }

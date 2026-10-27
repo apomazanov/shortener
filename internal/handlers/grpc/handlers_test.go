@@ -15,6 +15,7 @@ import (
 
 	"github.com/apomazanov/shortener/internal/domain"
 	"github.com/apomazanov/shortener/internal/domain/mocks"
+	my_middleware "github.com/apomazanov/shortener/internal/middleware"
 	"github.com/apomazanov/shortener/internal/validator"
 	pb "github.com/apomazanov/shortener/pkg/api/proto/v1"
 )
@@ -59,10 +60,10 @@ func ctxWithAuth(userID any, tokenExists any) context.Context {
 	ctx := context.Background()
 
 	if userID != nil {
-		ctx = context.WithValue(ctx, domain.UserIDKey, userID)
+		ctx = context.WithValue(ctx, my_middleware.UserIDKey, userID)
 	}
 	if tokenExists != nil {
-		ctx = context.WithValue(ctx, domain.TokenExistsKey, tokenExists)
+		ctx = context.WithValue(ctx, my_middleware.TokenExistsKey, tokenExists)
 	}
 
 	return ctx

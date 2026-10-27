@@ -12,12 +12,12 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/apomazanov/shortener/internal/domain"
 	my_jwt "github.com/apomazanov/shortener/internal/jwt"
 )
 
-// GRPCAuthenticator is a gRPC-interceptor for authorization procedure.
-func AuthInterceptor(jwtData *my_jwt.Data, log *zerolog.Logger) grpc.UnaryServerInterceptor {
+// NewAuthInterceptor returns a pointer to interceptor that is used for
+// authorization procedure in gRPC stack.
+func NewAuthInterceptor(jwtData *my_jwt.Data, log *zerolog.Logger) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
 		req any,
@@ -31,24 +31,24 @@ func AuthInterceptor(jwtData *my_jwt.Data, log *zerolog.Logger) grpc.UnaryServer
 
 		md, ok := metadata.FromIncomingContext(ctx)
 		if !ok {
-			ctx = context.WithValue(ctx, domain.TokenExistsKey, false)
+			ctx = context.WithValue(ctx, TokenExistsKey, false)
 			return handler(ctx, req)
 		}
 
 		values := md.Get("authorization")
 		if len(values) == 0 {
-			ctx = context.WithValue(ctx, domain.TokenExistsKey, false)
+			ctx = context.WithValue(ctx, TokenExistsKey, false)
 			return handler(ctx, req)
 		}
 
 		authHeader := values[0]
 		const prefix = "Bearer "
 		if !strings.HasPrefix(authHeader, prefix) {
-			ctx = context.WithValue(ctx, domain.TokenExistsKey, false)
+			ctx = context.WithValue(ctx, TokenExistsKey, false)
 			return handler(ctx, req)
 		}
 
-		ctx = context.WithValue(ctx, domain.TokenExistsKey, true)
+		ctx = context.WithValue(ctx, TokenExistsKey, true)
 		tokenStr := strings.TrimPrefix(authHeader, prefix)
 
 		// parsing token
@@ -64,7 +64,7 @@ func AuthInterceptor(jwtData *my_jwt.Data, log *zerolog.Logger) grpc.UnaryServer
 		// Token is OK
 
 		if err == nil && token.Valid {
-			ctx = context.WithValue(ctx, domain.UserIDKey, claims.UserID)
+			ctx = context.WithValue(ctx, UserIDKey, claims.UserID)
 			return handler(ctx, req)
 		}
 
@@ -86,7 +86,7 @@ func AuthInterceptor(jwtData *my_jwt.Data, log *zerolog.Logger) grpc.UnaryServer
 				return nil, status.Error(codes.Internal, codes.Internal.String())
 			}
 
-			ctx = context.WithValue(ctx, domain.UserIDKey, claims.UserID)
+			ctx = context.WithValue(ctx, UserIDKey, claims.UserID)
 		}
 
 		// If token is garbage, just skipping it

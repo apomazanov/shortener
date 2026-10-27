@@ -7,11 +7,10 @@ import (
 	"net/url"
 
 	"github.com/apomazanov/shortener/internal/domain"
+	"github.com/apomazanov/shortener/internal/handlers"
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog"
 )
-
-const aliasSize = 6
 
 // Handler contains data for handling application API endpoints.
 type Handler struct {
@@ -48,7 +47,7 @@ func (h *Handler) Get(c *echo.Context) error {
 	// Getting alias from request URL
 	alias := c.Param("alias")
 
-	if len(alias) != aliasSize {
+	if len(alias) != domain.AliasSize {
 		h.log.Info().
 			Str("op", "http_handler.Get").
 			Str("alias", alias).
@@ -132,10 +131,10 @@ func (h *Handler) GetUserURLs(c *echo.Context) error {
 		return echo.ErrInternalServerError
 	}
 
-	responseData := make([]domain.JSONGetUserURLsResponseItem, 0, len(data))
+	responseData := make([]handlers.JSONGetUserURLsResponseItem, 0, len(data))
 
 	for k, v := range data {
-		responseData = append(responseData, domain.JSONGetUserURLsResponseItem{
+		responseData = append(responseData, handlers.JSONGetUserURLsResponseItem{
 			ShortURL:    h.cfg.GetURLBase() + "/" + k,
 			OriginalURL: v,
 		})
@@ -198,7 +197,7 @@ func (h *Handler) CreateText(c *echo.Context) error {
 	}
 
 	// Casting body to string, validating
-	requestData := domain.JSONShortenRequest{URL: string(body)}
+	requestData := handlers.JSONShortenRequest{URL: string(body)}
 	if err := c.Validate(&requestData); err != nil {
 		return echo.ErrBadRequest
 	}
@@ -240,8 +239,8 @@ func (h *Handler) CreateText(c *echo.Context) error {
 // CreateJSON provides response to POST request of creating alias of certain
 // URL (JSON format).
 func (h *Handler) CreateJSON(c *echo.Context) error {
-	var requestData domain.JSONShortenRequest
-	var responseData domain.JSONShortenResponse
+	var requestData handlers.JSONShortenRequest
+	var responseData handlers.JSONShortenResponse
 
 	// Cookie
 
@@ -330,7 +329,7 @@ func (h *Handler) CreateJSONBatch(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	// Reading body
-	var requestData []domain.JSONBatchRequestItem
+	var requestData []handlers.JSONBatchRequestItem
 
 	if err := c.Bind(&requestData); err != nil {
 		return echo.ErrBadRequest
@@ -375,13 +374,13 @@ func (h *Handler) CreateJSONBatch(c *echo.Context) error {
 	// Filling response
 
 	// Same size as request. Even if there are URLs duplicates, correlation-id is major priority
-	responseData := make([]domain.JSONBatchResponseItem, batchSize)
+	responseData := make([]handlers.JSONBatchResponseItem, batchSize)
 
 	for i := range batchSize {
 		original := requestData[i].Original
 		alias := written[original]
 		responseDataResult, _ := url.JoinPath(h.cfg.GetURLBase(), alias)
-		responseData[i] = domain.JSONBatchResponseItem{
+		responseData[i] = handlers.JSONBatchResponseItem{
 			ID:     requestData[i].ID,
 			Result: responseDataResult,
 		}
@@ -432,7 +431,7 @@ func (h *Handler) DeleteUserURLs(c *echo.Context) error {
 		return echo.ErrBadRequest
 	}
 	for _, alias := range aliases {
-		if len(alias) != aliasSize {
+		if len(alias) != domain.AliasSize {
 			return echo.ErrBadRequest
 		}
 	}
