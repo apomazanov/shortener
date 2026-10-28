@@ -1,10 +1,11 @@
-package handlers_test
+package httphandlers
 
 import (
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 
 	"github.com/labstack/echo/v5"
@@ -12,8 +13,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/apomazanov/shortener/internal/domain"
-	"github.com/apomazanov/shortener/internal/handlers"
-	"github.com/apomazanov/shortener/internal/handlers/mocks"
+	"github.com/apomazanov/shortener/internal/domain/mocks"
 	"github.com/apomazanov/shortener/internal/validator"
 )
 
@@ -34,7 +34,7 @@ func (noopT) Logf(_ string, _ ...any)           {}
 func (noopT) Name() string                      { return "example" }
 func (noopT) Setenv(_, _ string)                {}
 
-func setupHandler() (*handlers.Handler, *mocks.MockBusinessService, *mocks.MockURLConfig, *mocks.MockHealthService, *mocks.MockJWT) {
+func setupHandler() (*Handler, *mocks.MockBusinessService, *mocks.MockURLConfig, *mocks.MockHealthService, *mocks.MockJWT) {
 	ctrl := gomock.NewController(&noopT{})
 
 	svc := mocks.NewMockBusinessService(ctrl)
@@ -43,7 +43,7 @@ func setupHandler() (*handlers.Handler, *mocks.MockBusinessService, *mocks.MockU
 	jwt := mocks.NewMockJWT(ctrl)
 
 	log := zerolog.Nop()
-	h := handlers.New(svc, cfg, &log, health, jwt)
+	h := New(svc, cfg, &log, health, jwt)
 
 	return h, svc, cfg, health, jwt
 }
@@ -224,6 +224,10 @@ func ExampleHandler_CreateJSONBatch() {
 	}
 	_ = json.Unmarshal(res.Body.Bytes(), &resp)
 
+	sort.Slice(resp, func(i, j int) bool {
+		return resp[i].ID < resp[j].ID
+	})
+
 	fmt.Println("status:", res.Code)
 	for _, item := range resp {
 		fmt.Printf("  %s -> %s\n", item.ID, item.Result)
@@ -263,6 +267,10 @@ func ExampleHandler_GetUserURLs() {
 		OriginalURL string `json:"original_url"`
 	}
 	_ = json.Unmarshal(res.Body.Bytes(), &resp)
+
+	sort.Slice(resp, func(i, j int) bool {
+		return resp[i].ShortURL < resp[j].ShortURL
+	})
 
 	for _, item := range resp {
 		fmt.Printf("  %s -> %s\n", item.ShortURL, item.OriginalURL)

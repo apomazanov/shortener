@@ -277,3 +277,15 @@ func (r *LocalStorage) DeleteBatch(ctx context.Context, batch map[string][]strin
 	// not implemented for this storage
 	return nil
 }
+
+// GetStats returns statistics data from local storage.
+func (r *LocalStorage) GetStats(ctx context.Context) (domain.Stats, error) {
+	// not implemented for this storage
+	return domain.Stats{}, nil
+}
+
+// RefreshStats refreshes statistics data in local storage.
+func (r *LocalStorage) RefreshStats(ctx context.Context) error {
+	// not implemented for this storage
+	return nil
+}

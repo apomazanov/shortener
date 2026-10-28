@@ -362,3 +362,31 @@ func (r *PostgresStorage) DeleteBatch(ctx context.Context, batch map[string][]st
 
 	return nil
 }
+
+// GetStats returns statistics data from postgres storage.
+func (r *PostgresStorage) GetStats(ctx context.Context) (domain.Stats, error) {
+	query := `
+		SELECT aliases, users FROM stats;
+	`
+	var data domain.Stats
+	err := r.pool.QueryRow(ctx, query).Scan(&data.Aliases, &data.Users)
+	if err != nil {
+		return data, fmt.Errorf("repo: failed to get stats: %w", err)
+	}
+
+	return data, nil
+}
+
+// RefreshStats refreshes statistics data in postgres storage.
+func (r *PostgresStorage) RefreshStats(ctx context.Context) error {
+	query := `
+		REFRESH MATERIALIZED VIEW CONCURRENTLY stats;
+	`
+
+	_, err := r.pool.Exec(ctx, query)
+	if err != nil {
+		return fmt.Errorf("repo: failed to refresh stats: %w", err)
+	}
+
+	return nil
+}
